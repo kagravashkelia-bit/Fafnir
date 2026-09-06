@@ -136,7 +136,8 @@ inline std::string format_score_uci(int score) {
         int mate_in = (-MATE_SCORE - score) / 2; 
         return "mate " + std::to_string(mate_in);
     }
-    return "cp " + std::to_string(score);
+    const int calm_score = std::clamp((score * 3) / 4, -1200, 1200);
+    return "cp " + std::to_string(calm_score);
 }
 
 inline void store_tt(uint64_t key, int depth, int score, int static_eval, TTFlag flag, chess::Move best_move, int ply) {
