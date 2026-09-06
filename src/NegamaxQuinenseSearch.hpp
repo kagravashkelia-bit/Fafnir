@@ -54,12 +54,12 @@ inline void init_search_time(int max_time_ms, bool infinite = false) {
     nodos_totales_busqueda = 0;
 }
 
-inline void check_time_and_longjump() {
+inline void check_time_and_longjump(const ThreadWorker& worker) {
     if (stop_search.load(std::memory_order_relaxed)) {
         throw SearchAbortedException();
     }
     
-    if ((nodos_totales_busqueda & 4095) == 0) {
+    if ((worker.nodos_busqueda & 4095) == 0) {
         if (!search_is_infinite && search_max_time_ms > 0) {
             auto now = std::chrono::high_resolution_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - search_start_time).count();
@@ -82,6 +82,13 @@ enum TTFlag : uint8_t {
 constexpr int MATE_SCORE = 29000;
 constexpr int DRAW_PENALTY = 20000;
 constexpr int WINNING_EVAL = 150;
+
+inline int draw_score(const chess::Board& board) {
+    const int eval = evaluate(board);
+    if (eval > WINNING_EVAL) return -32;
+    if (eval < -WINNING_EVAL) return 32;
+    return 0;
+}
 
 struct TTEntry {
     uint64_t key = 0;
@@ -312,7 +319,7 @@ inline int score_move(const ThreadWorker& worker, const chess::Board& board, con
 // ============================================================================
 inline int quiescence(ThreadWorker& worker, chess::Board& board, int alpha, int beta, int ply = 0) {
         worker.nodos_busqueda++;
-        check_time_and_longjump();
+        check_time_and_longjump(worker);
 
         int alpha_orig = alpha;
         uint64_t key = board.hash();
@@ -377,9 +384,12 @@ inline int quiescence(ThreadWorker& worker, chess::Board& board, int alpha, int 
             }
 
         board.makeMove(move);
+        const bool rubi_pushed = rubi_push(move);
         worker.pos_history.push_back(board.hash());
         int score = -quiescence(worker, board, -beta, -alpha, ply + 1);
+        if (rubi_pushed) rubi_pop();
         board.unmakeMove(move);
+        if (!rubi_pushed) rubi_sync(board);
         worker.pos_history.pop_back();
 
         if (score >= beta) {
@@ -419,10 +429,10 @@ inline LMRInit _lmr_init_instance;
 // ============================================================================
 inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alpha, int beta, int ply) {
     worker.nodos_busqueda++;
-    check_time_and_longjump();
+    check_time_and_longjump(worker);
 
     if (ply > 0 && (is_repetition(worker, board) || board.isHalfMoveDraw())) {
-        return 0;
+        return draw_score(board);
     }
 
     int mate_val = MATE_SCORE - ply;
@@ -476,12 +486,16 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
             }
         }
 
-        if (depth >= 2 && eval >= beta && board.hasNonPawnMaterial(board.sideToMove())) {
+        const bool zugzwang_sensitive = board.occ().count() <= 8;
+        if (depth >= 2 && eval >= beta && board.hasNonPawnMaterial(board.sideToMove()) &&
+            !zugzwang_sensitive) {
             board.makeNullMove();
+            rubi_sync(board);
             worker.pos_history.push_back(board.hash());
             int R = 3 + (depth / 3) + std::min(3, (eval - beta) / 200) + (improving ? 1 : 0);
             int null_score = -negamax(worker, board, depth - 1 - R, -beta, -beta + 1, ply + 1);
             board.unmakeNullMove();
+            rubi_sync(board);
             worker.pos_history.pop_back();
             if (null_score >= beta) {
                 return (null_score >= MATE_SCORE - MAX_PLY) ? beta : null_score;
@@ -502,9 +516,12 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
                 if (!see_ge(board, prob_moves[i], probcut_beta - eval)) continue;
                 
                 board.makeMove(prob_moves[i]);
+                const bool rubi_pushed = rubi_push(prob_moves[i]);
                 worker.pos_history.push_back(board.hash());
                 int probcut_score = -negamax(worker, board, depth - 4, -probcut_beta, -probcut_beta + 1, ply + 1);
+                if (rubi_pushed) rubi_pop();
                 board.unmakeMove(prob_moves[i]);
+                if (!rubi_pushed) rubi_sync(board);
                 worker.pos_history.pop_back();
 
                 if (probcut_score >= probcut_beta) return probcut_beta;
@@ -600,6 +617,7 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
         }
 
         board.makeMove(move);
+        const bool rubi_pushed = rubi_push(move);
         worker.pos_history.push_back(board.hash());
         bool gives_check = board.inCheck();
         moves_searched++;
@@ -610,7 +628,7 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
         if (moves_searched == 1) {
             score = -negamax(worker, board, new_depth, -beta, -alpha, ply + 1);
         } else {
-            bool can_lmr = (depth >= 3 && moves_searched > 2 && !in_check && !gives_check && !is_promotion);
+            bool can_lmr = (depth >= 3 && moves_searched > 1 && !in_check && !gives_check && !is_promotion);
             bool needs_full_search = true;
 
             if (can_lmr) {
@@ -623,10 +641,12 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
                     
                     if (!is_pv_node) R++;
                     if (!improving) R++;
+                    if (!is_pv_node && depth >= 5) R++;
                     if (is_quiet) {
                         int hist = worker.history_table[static_cast<int>(moving_side)][move.from().index()][move.to().index()];
                         if (hist < 0) R++;
                         else if (hist > 10000) R--;
+                        if (hist < -2000 && !is_pv_node) R++;
                     }
 
                     R = std::clamp(R, 1, new_depth - 1);
@@ -647,6 +667,8 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
         }
 
         board.unmakeMove(move);
+        if (rubi_pushed) rubi_pop();
+        else rubi_sync(board);
         worker.pos_history.pop_back();
 
         if (score > best_score) {

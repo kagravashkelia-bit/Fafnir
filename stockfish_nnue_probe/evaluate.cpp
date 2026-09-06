@@ -134,10 +134,15 @@ int Eval::simple_eval(const Position& pos, Color c) {
 
         int  simpleEval = simple_eval(pos, pos.side_to_move());
         bool smallNet   = std::abs(simpleEval) > 1050;
+        return evaluate(pos, smallNet);
+    }
+
+    Value Eval::evaluate(const Position& pos, bool useSmallNet) {
+        int  simpleEval = simple_eval(pos, pos.side_to_move());
 
         int nnueComplexity;
 
-        Value nnue = smallNet ? NNUE::evaluate<NNUE::Small>(pos, true, &nnueComplexity)
+        Value nnue = useSmallNet ? NNUE::evaluate<NNUE::Small>(pos, true, &nnueComplexity)
                               : NNUE::evaluate<NNUE::Big>(pos, true, &nnueComplexity);
 
         nnue -= nnue * (nnueComplexity + std::abs(simpleEval - nnue)) / 32768;

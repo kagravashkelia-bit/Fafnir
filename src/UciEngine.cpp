@@ -28,39 +28,44 @@ void UciEngine::handle_position(std::stringstream& command) {
 
     std::string position_type;
     command >> position_type;
+
     if (position_type == "startpos") {
         board = chess::Board();
         std::string moves_token;
-        if (command >> moves_token && moves_token == "moves") {
-            std::string move_text;
-            while (command >> move_text) {
-                chess::Move move = chess::uci::uciToMove(board, move_text);
-                if (move != chess::Move::NO_MOVE) board.makeMove(move);
-            }
+        if (command >> moves_token && moves_token != "moves") {
+            // Ignora tokens extra si no es "moves"
         }
-        return;
-    }
-
-    if (position_type == "fen") {
-        std::string fen;
+    } else if (position_type == "fen") {
+        std::string fen = "";
         std::string token;
-        while (command >> token && token != "moves") {
+        while (command >> token) {
+            if (token == "moves") {
+                break;
+            }
             if (!fen.empty()) fen += " ";
             fen += token;
         }
         board.setFen(fen);
+    }
 
-        if (token == "moves") {
-            std::string move_text;
-            while (command >> move_text) {
-                chess::Move move = chess::uci::uciToMove(board, move_text);
-                if (move != chess::Move::NO_MOVE) board.makeMove(move);
-            }
+    // Sincronizar evaluación NNUE tras cargar FEN inicial
+    rubi_sync(board);
+
+    // Aplicar movimientos de la partida
+    std::string move_text;
+    while (command >> move_text) {
+        if (move_text == "moves") continue;
+        chess::Move move = chess::uci::uciToMove(board, move_text);
+        if (move != chess::Move::NO_MOVE) {
+            board.makeMove(move);
+            rubi_sync(board); // Sincroniza NNUE tras cada jugada
         }
     }
 }
 
 void UciEngine::handle_go(std::stringstream& command) {
+    search.stop();
+    
     int depth = 64;
     int movetime = 0;
     int wtime = 0;
@@ -104,12 +109,22 @@ void UciEngine::handle_go(std::stringstream& command) {
 }
 
 void UciEngine::run() {
+    is_running = true;
+    
+    // Lanzamos la lectura de la GUI en un hilo separado
+    gui_thread = std::thread(&UciEngine::main_loop, this);
+    
+    // Esperamos a que el hilo termine (cuando la GUI manda 'quit')
+    if (gui_thread.joinable()) {
+        gui_thread.join();
+    }
+}
+
+void UciEngine::main_loop() {
     std::cout << "FlashBit 1.2 NNUE" << std::endl;
-    std::ios_base::sync_with_stdio(false);
-    std::cin.tie(nullptr);
 
     std::string line;
-    while (std::getline(std::cin, line)) {
+    while (is_running && std::getline(std::cin, line)) {
         if (line.empty()) continue;
 
         std::stringstream command(line);
@@ -121,19 +136,23 @@ void UciEngine::run() {
         } else if (name == "isready") {
             sync_cout("readyok\n");
         } else if (name == "eval") {
-            board = chess::Board();
             sync_cout(format_score_uci(evaluate(board)) + "\n\n");
         } else if (name == "ucinewgame") {
             search.stop();
             clear_tt();
             board = chess::Board();
+            rubi_sync(board); // Sincroniza el acumulador global al reiniciar
             sync_cout("readyok\n");
         } else if (name == "position") {
             handle_position(command);
         } else if (name == "move" || name == "usermove") {
             search.stop();
             std::string move_text;
-            if (command >> move_text) {} else if (name == "setoption") {
+            if (command >> move_text) {
+                chess::Move move = chess::uci::uciToMove(board, move_text);
+                if (move != chess::Move::NO_MOVE) board.makeMove(move);
+            }
+        } else if (name == "setoption") {
             std::string token, opt_name, opt_val;
             command >> token; // Lee "name"
             if (token == "name") {
@@ -146,16 +165,13 @@ void UciEngine::run() {
                     }
                 }
             }
-        } else if (name == "ucinewgame") {
-                chess::Move move = chess::uci::uciToMove(board, move_text);
-                if (move != chess::Move::NO_MOVE) board.makeMove(move);
-            }
         } else if (name == "go") {
             handle_go(command);
         } else if (name == "stop") {
             search.stop();
         } else if (name == "quit") {
             search.stop();
+            is_running = false;
             break;
         }
     }
