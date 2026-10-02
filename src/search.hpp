@@ -24,18 +24,38 @@ struct ThreadWorker {
     uint64_t nodos_busqueda = 0;
     std::vector<uint64_t> pos_history;
     chess::Move killer_moves[MAX_PLY][2] = {};
+    int cont_history[2][6][64][6][64] = {};
+    chess::PieceType moved_piece_stack[MAX_PLY] = {};
+    chess::Square    moved_to_stack[MAX_PLY]    = {};
     int history_table[2][64][64] = {};
     int static_eval_stack[MAX_PLY] = {};
+    chess::Move pv_table[MAX_PLY][MAX_PLY] = {};
+    int pv_length[MAX_PLY] = {};
+    int sel_depth = 0;
 };
 
 inline bool is_repetition(const ThreadWorker& worker, const chess::Board& board) {
-    int clock = board.halfMoveClock();
-    int end = std::max(0, static_cast<int>(worker.pos_history.size()) - clock);
-    for (int i = static_cast<int>(worker.pos_history.size()) - 2; i >= end; i -= 2) {
-        if (worker.pos_history[i] == board.hash()) {
+    const int size = static_cast<int>(worker.pos_history.size());
+
+    // No hay posiciones anteriores comparables.
+    if (size < 3)
+        return false;
+
+    const int clock = std::min(
+        board.halfMoveClock(),
+        static_cast<unsigned>(size)
+    );
+
+    // La posición actual está en size - 1.
+    // Una repetición debe estar 2 plies atrás, no 1.
+    const int start = size - 3;
+    const int end = std::max(0, size - 1 - clock);
+
+    for (int i = start; i >= end; i -= 2) {
+        if (worker.pos_history[i] == board.hash())
             return true;
-        }
     }
+
     return false;
 }
 
@@ -85,8 +105,26 @@ constexpr int WINNING_EVAL = 150;
 
 inline int draw_score(const chess::Board& board) {
     const int eval = evaluate(board);
-    if (eval > WINNING_EVAL) return -32;
-    if (eval < -WINNING_EVAL) return 32;
+
+    constexpr int DRAW_THRESHOLD = 150;
+    constexpr int MAX_DRAW_CONTEMPT = 160;
+
+    if (eval > DRAW_THRESHOLD) {
+        const int margin = eval - DRAW_THRESHOLD;
+        const int penalty = std::clamp(32 + margin / 3,
+                                       32,
+                                       MAX_DRAW_CONTEMPT);
+        return -penalty;
+    }
+
+    if (eval < -DRAW_THRESHOLD) {
+        const int margin = -eval - DRAW_THRESHOLD;
+        const int bonus = std::clamp(32 + margin / 3,
+                                     32,
+                                     MAX_DRAW_CONTEMPT);
+        return bonus;
+    }
+
     return 0;
 }
 
@@ -127,6 +165,8 @@ inline int score_from_tt(int score, int ply) {
     return score;
 }
 
+const int NormalizeToPawnValue = 4;
+
 inline std::string format_score_uci(int score) {
     if (score >= MATE_SCORE - 1000) {
         int mate_in = (MATE_SCORE - score + 1) / 2;
@@ -136,8 +176,7 @@ inline std::string format_score_uci(int score) {
         int mate_in = (-MATE_SCORE - score) / 2; 
         return "mate " + std::to_string(mate_in);
     }
-    const int calm_score = std::clamp((score * 3) / 4, -1200, 1200);
-    return "cp " + std::to_string(calm_score);
+    return "cp " + std::to_string(score / NormalizeToPawnValue);
 }
 
 inline void store_tt(uint64_t key, int depth, int score, int static_eval, TTFlag flag, chess::Move best_move, int ply) {
@@ -171,6 +210,10 @@ inline void clear_search_history(ThreadWorker& worker) {
         for (int f = 0; f < 64; ++f)
             for (int t = 0; t < 64; ++t)
                 worker.history_table[c][f][t] = 0;
+
+                    std::fill(std::begin(worker.pv_length),
+              std::end(worker.pv_length),
+              0);
 }
 
 // ============================================================================
@@ -277,7 +320,14 @@ inline bool see_ge(const chess::Board& board, const chess::Move& move, int thres
 struct ScoredMove {
     chess::Move move;
     int score;
+    int see_score;
+    bool see_valid;
 };
+
+extern "C" {
+    extern const unsigned char _binary_nn_baff1ede1f90_nnue_start[];
+    extern const unsigned char _binary_nn_baff1ede1f90_nnue_end[];
+}
 
 inline int score_move(const ThreadWorker& worker, const chess::Board& board, const chess::Move& move, const chess::Move& tt_move, int ply) {
     if (move == tt_move) return 200000000; 
@@ -299,10 +349,13 @@ inline int score_move(const ThreadWorker& worker, const chess::Board& board, con
                          : 100;
         int attacker_val = PIECE_VALUES[static_cast<int>(attacker.type())];
         
-        if (victim_val >= attacker_val) {
+        // Evaluación estática exacta de la secuencia de capturas (SEE)
+        if (see_ge(board, move, 0)) {
+            // Captura ganadora o igualada según SEE
             return 50000000 + (victim_val * 10 - attacker_val);
         } else {
-            return 10000000 + (victim_val * 10 - attacker_val);
+            // Captura perdedora: se evalúa según el déficit real del SEE
+            return 10000000 + see(board, move);
         }
     }
 
@@ -312,101 +365,223 @@ inline int score_move(const ThreadWorker& worker, const chess::Board& board, con
     }
 
     int color = static_cast<int>(board.sideToMove());
-    return worker.history_table[color][move.from().index()][move.to().index()];
+    const int history = std::clamp(
+        worker.history_table[color][move.from().index()][move.to().index()], -4000, 4000);
+    return 100000 * 128 + history * 2;
 }
 
 // ============================================================================
 // 3. QUIESCENCE SEARCH (Con Delta Pruning O(1))
 // ============================================================================
-inline int quiescence(ThreadWorker& worker, chess::Board& board, int alpha, int beta, int ply = 0) {
-        worker.nodos_busqueda++;
-        check_time_and_longjump(worker);
+inline int quiescence(ThreadWorker& worker,
+                      chess::Board& board,
+                      int alpha,
+                      int beta,
+                      int ply = 0) {
+    worker.nodos_busqueda++;
+    check_time_and_longjump(worker);
 
-        int alpha_orig = alpha;
-        uint64_t key = board.hash();
-        chess::Move tt_move = chess::Move::NO_MOVE;
+    if (ply > worker.sel_depth)
+        worker.sel_depth = ply;
+
+    const int alpha_orig = alpha;
+    const uint64_t key = board.hash();
+
+    chess::Move tt_move = chess::Move::NO_MOVE;
     int tt_score = 0;
     int cached_eval = NO_EVAL;
 
-    if (probe_tt(key, 0, alpha, beta, tt_score, cached_eval, tt_move, ply)) {
+    if (probe_tt(key, 0, alpha, beta, tt_score, cached_eval, tt_move, ply))
         return tt_score;
-    }
 
-    int stand_pat = (cached_eval != NO_EVAL) ? cached_eval : evaluate(board);
-    if (stand_pat >= beta) return beta;
-    if (alpha < stand_pat) alpha = stand_pat;
+    const bool in_check = board.inCheck();
 
-    chess::Movelist moves;
-    chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, board);
+    // ============================================================
+    // STAND PAT SOLO ES VÁLIDO CUANDO NO ESTAMOS EN JAQUE
+    // ============================================================
+    int stand_pat = -MATE_SCORE;
 
-    std::array<ScoredMove, 256> scored_moves;
-    size_t num_moves = moves.size();
-    for (size_t i = 0; i < num_moves; ++i) {
-        scored_moves[i] = { moves[i], score_move(worker, board, moves[i], tt_move, 0) };
-    }
+    if (!in_check) {
+        stand_pat = (cached_eval != NO_EVAL)
+                  ? cached_eval
+                  : evaluate(board);
 
-    for (size_t i = 0; i < num_moves; ++i) {
-        size_t best_idx = i;
-        int max_score = scored_moves[i].score;
-        for (size_t j = i + 1; j < num_moves; ++j) {
-            if (scored_moves[j].score > max_score) {
-                max_score = scored_moves[j].score;
-                best_idx = j;
-            }
+        if (stand_pat >= beta) {
+            store_tt(key, 0, stand_pat, stand_pat,
+                     TT_BETA, chess::Move::NO_MOVE, ply);
+            return stand_pat;
         }
-        std::swap(scored_moves[i], scored_moves[best_idx]);
 
-        const auto& move = scored_moves[i].move;
+        if (stand_pat > alpha)
+            alpha = stand_pat;
+    }
 
-            // 1. Identificar el valor real de la víctima (corrigiendo En Passant)
+    // ============================================================
+    // EN JAQUE: TODAS LAS EVASIONES LEGALES
+    // NO SOLO CAPTURAS
+    // ============================================================
+    chess::Movelist moves;
+
+    if (in_check) {
+        chess::movegen::legalmoves(moves, board);
+
+        if (moves.empty())
+            return -MATE_SCORE + ply;
+    } else {
+        chess::movegen::legalmoves<
+            chess::movegen::MoveGenType::CAPTURE>(moves, board);
+    }
+
+    // ============================================================
+    // SCORE DE MOVIMIENTOS
+    // ============================================================
+    std::array<ScoredMove, 256> scored_moves;
+
+    const size_t num_moves = moves.size();
+
+    for (size_t i = 0; i < num_moves; ++i) {
+        const chess::Move move = moves[i];
+
+        const bool capture =
+            board.isCapture(move);
+
+        int see_score = 0;
+        bool see_valid = false;
+
+        if (capture) {
+            see_score = see(board, move);
+            see_valid = true;
+        }
+
+        scored_moves[i] = {
+            move,
+            score_move(worker, board, move, tt_move, ply),
+            see_score,
+            see_valid
+        };
+    }
+
+    // ============================================================
+    // SORT O(N LOG N)
+    // Antes era selección O(N²)
+    // ============================================================
+    std::sort(
+        scored_moves.begin(),
+        scored_moves.begin() + num_moves,
+        [](const ScoredMove& a, const ScoredMove& b) {
+            return a.score > b.score;
+        });
+
+    for (size_t i = 0; i < num_moves; ++i) {
+
+        const chess::Move move = scored_moves[i].move;
+
+        // ========================================================
+        // FUERA DE JAQUE: DELTA PRUNING / SEE
+        // EN JAQUE NO SE PUEDE PODAR ASÍ
+        // ========================================================
+        if (!in_check) {
+
             int victim_val = 0;
+
             if (move.typeOf() == chess::Move::ENPASSANT) {
-                victim_val = PIECE_VALUES[static_cast<int>(chess::PieceType::PAWN)];
+                victim_val =
+                    PIECE_VALUES[
+                        static_cast<int>(
+                            chess::PieceType::PAWN
+                        )
+                    ];
             } else {
-                auto victim = board.at(move.to());
+                const auto victim = board.at(move.to());
+
                 if (victim != chess::Piece::NONE) {
-                    victim_val = PIECE_VALUES[static_cast<int>(victim.type())];
+                    victim_val =
+                        PIECE_VALUES[
+                            static_cast<int>(victim.type())
+                        ];
                 }
             }
 
-            // 2. Sumar el valor de la promoción al Delta
             if (move.typeOf() == chess::Move::PROMOTION) {
-                victim_val += PIECE_VALUES[static_cast<int>(move.promotionType())] - PIECE_VALUES[static_cast<int>(chess::PieceType::PAWN)];
+                victim_val +=
+                    PIECE_VALUES[
+                        static_cast<int>(move.promotionType())
+                    ]
+                    -
+                    PIECE_VALUES[
+                        static_cast<int>(chess::PieceType::PAWN)
+                    ];
             }
 
-            // 3. Delta Pruning con margen de seguridad (200 centipeones)
-            if (stand_pat + victim_val + 200 < alpha) {
+            // Delta prudente
+            if (stand_pat + victim_val + 100 < alpha)
                 continue;
-            }
 
-            // 4. SEE Pruning para evitar capturas perdedoras
-            if (!see_ge(board, move, 0)) {
+            // SEE pruning
+            if (!see_ge(board, move, 0))
                 continue;
-            }
+        }
 
         board.makeMove(move);
+
         const bool rubi_pushed = rubi_push(move);
         worker.pos_history.push_back(board.hash());
-        int score = -quiescence(worker, board, -beta, -alpha, ply + 1);
-        if (rubi_pushed) rubi_pop();
+
+        const int score =
+            -quiescence(
+                worker,
+                board,
+                -beta,
+                -alpha,
+                ply + 1
+            );
+
+        if (rubi_pushed)
+            rubi_pop();
+
         board.unmakeMove(move);
-        if (!rubi_pushed) rubi_sync(board);
+
+        if (!rubi_pushed)
+            rubi_sync(board);
+
         worker.pos_history.pop_back();
 
         if (score >= beta) {
-                store_tt(key, 0, beta, stand_pat, TT_BETA, chess::Move::NO_MOVE, ply);
-                return beta;
-            }
-            if (score > alpha) alpha = score;
+            store_tt(
+                key,
+                0,
+                score,
+                stand_pat,
+                TT_BETA,
+                move,
+                ply
+            );
+            return score;
         }
 
-        TTFlag flag = (alpha > alpha_orig) ? TT_EXACT : TT_ALPHA;
-        store_tt(key, 0, alpha, stand_pat, flag, chess::Move::NO_MOVE, ply);
-
-        return alpha;
+        if (score > alpha)
+            alpha = score;
     }
 
-constexpr int FUTILITY_MARGIN[6] = { 0, 150, 300, 450, 600, 750 }; 
+    const TTFlag flag =
+        (alpha > alpha_orig)
+            ? TT_EXACT
+            : TT_ALPHA;
+
+    store_tt(
+        key,
+        0,
+        alpha,
+        stand_pat,
+        flag,
+        chess::Move::NO_MOVE,
+        ply
+    );
+
+    return alpha;
+}
+
+constexpr int FUTILITY_MARGIN[6] = { 0, 90, 180, 270, 360, 450 }; 
 inline int LMR_TABLE[64][256];
 
 // CORRECCIÓN: Inicialización estática automática (Garantiza que LMR funcione)
@@ -415,7 +590,7 @@ struct LMRInit {
         for (int d = 0; d < 64; ++d) {
             for (int m = 0; m < 256; ++m) {
                 if (d > 0 && m > 0) {
-                    LMR_TABLE[d][m] = 1 + static_cast<int>(std::log(d) * std::log(m) / 2.25);
+                    LMR_TABLE[d][m] = 1 + static_cast<int>(std::log(d) * std::log(m) / 1.75);
                 } else {
                     LMR_TABLE[d][m] = 0;
                 }
@@ -431,9 +606,16 @@ inline LMRInit _lmr_init_instance;
 inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alpha, int beta, int ply) {
     worker.nodos_busqueda++;
     check_time_and_longjump(worker);
+    if (ply > worker.sel_depth)
+        worker.sel_depth = ply;
 
-    if (ply > 0 && (is_repetition(worker, board) || board.isHalfMoveDraw())) {
-        return draw_score(board);
+    if (ply < MAX_PLY)
+        worker.pv_length[ply] = 0;
+
+    if (ply > 0) {
+        if (is_repetition(worker, board) || board.isHalfMoveDraw()) {
+            return draw_score(board);
+        }
     }
 
     int mate_val = MATE_SCORE - ply;
@@ -450,7 +632,8 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
     int tt_score = 0;
     int cached_eval = NO_EVAL;
     if (probe_tt(key, depth, alpha, beta, tt_score, cached_eval, tt_move, ply)) {
-        if (!is_pv_node || (tt_score > alpha && tt_score < beta)) return tt_score;
+        if (!is_pv_node)
+            return tt_score;
     }
 
     if (depth <= 0 && !in_check) {
@@ -460,6 +643,27 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
     int extension = (in_check && ply < MAX_PLY - 1) ? 1 : 0;
     
     int eval = (cached_eval != NO_EVAL) ? cached_eval : evaluate(board);
+    // ========================================================================
+    // RAZORING
+    // ========================================================================
+
+    if (!is_pv_node &&
+        !in_check &&
+        depth >= 1 &&
+        eval < alpha - 1928 * depth * depth) {
+
+        return quiescence(
+            worker,
+            board,
+            alpha,
+            beta,
+            ply
+        );
+    }
+
+    const bool conversion_mode =
+        !in_check &&
+        eval >= WINNING_EVAL + 100;
     if (ply < MAX_PLY) worker.static_eval_stack[ply] = eval;
 
     if (depth >= 4 && tt_move == chess::Move::NO_MOVE && (is_pv_node || eval + 256 >= beta)) {
@@ -476,8 +680,41 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
             if (q_score <= alpha) return q_score;
         }
 
-        if (depth <= 3 && eval - 120 * depth >= beta && std::abs(beta) < MATE_SCORE) {
-            return eval - 120 * depth;
+        // ====================================================================
+        // FUTILITY PRUNING
+        // ====================================================================
+
+        if (depth < 19 &&
+            eval >= beta &&
+            std::abs(beta) < MATE_SCORE) {
+
+            const bool opponent_worsening =
+                (ply > 0)
+                    ? eval > -worker.static_eval_stack[ply - 1]
+                    : false;
+
+            int futility_mult =
+                std::min(
+                    180 + depth * 16,
+                    340
+                );
+
+            // Aproximación de !ttHit usando ausencia de TT move.
+            if (tt_move == chess::Move::NO_MOVE)
+                futility_mult -= 80;
+
+            const int futility_margin =
+                futility_mult * depth
+                - (
+                    2789 * static_cast<int>(improving)
+                    + 335 * static_cast<int>(opponent_worsening)
+                  ) * futility_mult / 1024;
+
+            if (eval - futility_margin >= beta) {
+
+                return
+                    (661 * beta + 363 * eval) / 1024;
+            }
         }
 
         if (depth <= 3) {
@@ -487,56 +724,166 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
             }
         }
 
-        const bool zugzwang_sensitive = board.occ().count() <= 8;
-        if (depth >= 2 && eval >= beta && board.hasNonPawnMaterial(board.sideToMove()) &&
+        const bool zugzwang_sensitive =
+            board.occ().count() <= 8;
+
+        if (depth >= 3 &&
+            eval >= beta
+                - 52 * depth
+                - 188 * static_cast<int>(improving)
+                + 1460 &&
+            board.hasNonPawnMaterial(board.sideToMove()) &&
             !zugzwang_sensitive) {
+
             board.makeNullMove();
+
             rubi_sync(board);
-            worker.pos_history.push_back(board.hash());
-            int R = 3 + (depth / 3) + std::min(3, (eval - beta) / 200) + (improving ? 1 : 0);
-            int null_score = -negamax(worker, board, depth - 1 - R, -beta, -beta + 1, ply + 1);
+
+            worker.pos_history.push_back(
+                board.hash()
+            );
+
+            const int eval_excess =
+                std::max(
+                    0,
+                    (eval - beta) / 1024
+                );
+
+            int R =
+                7
+                + depth / 3
+                + eval_excess;
+
+            R =
+                std::min(
+                    R,
+                    depth - 1
+                );
+
+            const int null_score =
+                -negamax(
+                    worker,
+                    board,
+                    depth - 1 - R,
+                    -beta,
+                    -beta + 1,
+                    ply + 1
+                );
+
             board.unmakeNullMove();
+
             rubi_sync(board);
+
             worker.pos_history.pop_back();
+
             if (null_score >= beta) {
-                return (null_score >= MATE_SCORE - MAX_PLY) ? beta : null_score;
+
+                return
+                    (null_score >= MATE_SCORE - MAX_PLY)
+                        ? beta
+                        : null_score;
             }
         }
 
-        int rfp_margin = (improving ? 75 : 100) * depth;
-        if (depth <= 7 && eval - rfp_margin >= beta && std::abs(beta) < MATE_SCORE) {
+        int rfp_margin =
+            (improving ? 45 : 75) * depth;
+
+        if (depth <= 9 && eval - rfp_margin >= beta && std::abs(beta) < MATE_SCORE) {
             return eval;
         }
 
-        if (depth >= 5 && std::abs(beta) < MATE_SCORE) {
-            int probcut_beta = beta + 200;
-            chess::Movelist prob_moves;
-            chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(prob_moves, board);
-            
-            for (int i = 0; i < static_cast<int>(prob_moves.size()); ++i) {
-                if (!see_ge(board, prob_moves[i], probcut_beta - eval)) continue;
-                
-                board.makeMove(prob_moves[i]);
-                const bool rubi_pushed = rubi_push(prob_moves[i]);
-                worker.pos_history.push_back(board.hash());
-                int probcut_score = -negamax(worker, board, depth - 4, -probcut_beta, -probcut_beta + 1, ply + 1);
-                if (rubi_pushed) rubi_pop();
-                board.unmakeMove(prob_moves[i]);
-                if (!rubi_pushed) rubi_sync(board);
-                worker.pos_history.pop_back();
+        // ====================================================================
+        // PROBCUT
+        // ====================================================================
 
-                if (probcut_score >= probcut_beta) return probcut_beta;
+        if (depth >= 3 &&
+            std::abs(beta) < MATE_SCORE) {
+
+            const int probcut_beta =
+                beta
+                + 964
+                - 256 * static_cast<int>(improving);
+
+            const int probcut_depth =
+                depth -
+                (improving ? 5 : 3);
+
+            if (probcut_depth > 0) {
+
+                chess::Movelist prob_moves;
+
+                chess::movegen::legalmoves<
+                    chess::movegen::MoveGenType::CAPTURE
+                >(prob_moves, board);
+
+                for (int i = 0;
+                     i < static_cast<int>(prob_moves.size());
+                     ++i) {
+
+                    if (!see_ge(
+                            board,
+                            prob_moves[i],
+                            probcut_beta - eval))
+                        continue;
+
+                    board.makeMove(
+                        prob_moves[i]
+                    );
+
+                    const bool rubi_pushed =
+                        rubi_push(
+                            prob_moves[i]
+                        );
+
+                    worker.pos_history.push_back(
+                        board.hash()
+                    );
+
+                    const int probcut_score =
+                        -negamax(
+                            worker,
+                            board,
+                            probcut_depth,
+                            -probcut_beta,
+                            -probcut_beta + 1,
+                            ply + 1
+                        );
+
+                    if (rubi_pushed)
+                        rubi_pop();
+
+                    board.unmakeMove(
+                        prob_moves[i]
+                    );
+
+                    if (!rubi_pushed)
+                        rubi_sync(board);
+
+                    worker.pos_history.pop_back();
+
+                    if (probcut_score >= probcut_beta)
+                        return probcut_beta;
+                }
             }
         }
-    }
-
-    bool futility_pruning = false;
-    if (!is_pv_node && !in_check && depth <= 5 && std::abs(alpha) < MATE_SCORE) {
-        if (eval + FUTILITY_MARGIN[depth] <= alpha) futility_pruning = true;
     }
 
     chess::Movelist moves;
     chess::movegen::legalmoves(moves, board);
+
+    int loud_moves = 0;
+    for (size_t i = 0; i < moves.size(); ++i) {
+        if (board.isCapture(moves[i]) || moves[i].typeOf() == chess::Move::PROMOTION)
+            loud_moves++;
+    }
+    // Heurística: si ≥25% de las legales son capturas/promociones, o hay jaque, es "ruidosa"
+    bool tactical_position = in_check || (loud_moves * 4 >= (int)moves.size());
+
+    bool futility_pruning = false;
+    if (!is_pv_node && !in_check && depth <= 5 && std::abs(alpha) < MATE_SCORE) {
+        int margin = tactical_position ? FUTILITY_MARGIN[depth] + 80 : FUTILITY_MARGIN[depth];
+        if (eval + margin <= alpha) futility_pruning = true;
+    }
 
     if (moves.empty()) {
         if (in_check)
@@ -591,12 +938,14 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
         }
 
         if (is_quiet) {
-            if (futility_pruning && moves_searched > 0) {
+            if (futility_pruning && moves_searched > 0 && !conversion_mode) {
                 continue;
             }
 
             int lmp_threshold = 3 + (depth * depth) / (improving ? 1 : 2);
-            if (!is_pv_node && !in_check && depth <= 7 && quiet_moves_searched >= lmp_threshold) {
+            if (tactical_position) lmp_threshold += lmp_threshold / 2; // +50% de margen en ramas ruidosas
+            if (!is_pv_node && !in_check && depth <= 7 &&
+                    quiet_moves_searched >= lmp_threshold && !conversion_mode && !in_check) {
                 continue;
             }
 
@@ -607,7 +956,12 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
             }
 
             int history_threshold = -2500 * depth;
-            if (moves_searched > 0 && !is_pv_node && !in_check && depth <= 5 && hist < history_threshold) {
+            if (moves_searched > 0 &&
+                !is_pv_node &&
+                !in_check &&
+                depth <= 5 &&
+                hist < history_threshold &&
+                !conversion_mode) {
                 continue;
             }
 
@@ -639,6 +993,7 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
                     int d = std::min(depth, 63);
                     int m = std::min(moves_searched, 255);
                     int R = LMR_TABLE[d][m];
+                    if (tactical_position) R = std::max(1, R - 1);
                     
                     if (!is_pv_node) R++;
                     if (!improving) R++;
@@ -675,6 +1030,25 @@ inline int negamax(ThreadWorker& worker, chess::Board& board, int depth, int alp
         if (score > best_score) {
             best_score = score;
             best_move = move;
+
+            if (ply < MAX_PLY) {
+                worker.pv_table[ply][0] = move;
+
+                int child_len = 0;
+
+                if (ply + 1 < MAX_PLY)
+                    child_len = worker.pv_length[ply + 1];
+
+                const int copy_len =
+                    std::min(child_len, MAX_PLY - ply - 1);
+
+                for (int k = 0; k < copy_len; ++k) {
+                    worker.pv_table[ply][k + 1] =
+                        worker.pv_table[ply + 1][k];
+                }
+
+                worker.pv_length[ply] = copy_len + 1;
+            }
         }
         if (score > alpha) alpha = score;
 

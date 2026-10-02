@@ -1,59 +1,167 @@
+#include <exception>
 #include <iostream>
-#include <fstream>
-#include <cstdio>
-#include "UciEngine.hpp"
-#include "probe.h" // Interfaz de Stockfish Probe
+#include <string>
 
-// Símbolos generados por 'ld' para Big Net y Small Net
-extern "C" {
-    // Big Net (nn-b1a57edbea57.nnue)
-    extern const unsigned char _binary_nn_b1a57edbea57_nnue_start[];
-    extern const unsigned char _binary_nn_b1a57edbea57_nnue_end[];
+#include "uci.hpp"
+#include "probe.h"
 
-    // Small Net (nn-baff1ede1f90.nnue)
-    extern const unsigned char _binary_nn_baff1ede1f90_nnue_start[];
-    extern const unsigned char _binary_nn_baff1ede1f90_nnue_end[];
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
+namespace {
+
+UciEngine g_engine;
+bool g_flashbit_initialized = false;
+
+void initialize_flashbit()
+{
+    if (g_flashbit_initialized)
+        return;
+
+    Stockfish::Probe::init(
+        "nn-49c1193b131c.nnue",
+        "nn-37f18f62d772.nnue"
+    );
+
+    g_flashbit_initialized = true;
 }
 
-int main() {
-    // 1. Obtener la Big Net embebida
-    const unsigned char* big_net_data = _binary_nn_b1a57edbea57_nnue_start;
-    size_t big_net_size = _binary_nn_b1a57edbea57_nnue_end - _binary_nn_b1a57edbea57_nnue_start;
+} // namespace
 
-    // 2. Obtener la Small Net embebida
-    const unsigned char* small_net_data = _binary_nn_baff1ede1f90_nnue_start;
-    size_t small_net_size = _binary_nn_baff1ede1f90_nnue_end - _binary_nn_baff1ede1f90_nnue_start;
+#ifdef __EMSCRIPTEN__
 
-    // 3. Extraer ambas redes a archivos temporales para la sonda
-    const std::string tmp_big_path = "embedded_big.tmp";
-    const std::string tmp_small_path = "embedded_small.tmp";
+extern "C" {
 
+EMSCRIPTEN_KEEPALIVE
+int flashbit_init()
+{
+    try
     {
-        std::ofstream tmp_big(tmp_big_path, std::ios::binary);
-        tmp_big.write(reinterpret_cast<const char*>(big_net_data), big_net_size);
-
-        std::ofstream tmp_small(tmp_small_path, std::ios::binary);
-        tmp_small.write(reinterpret_cast<const char*>(small_net_data), small_net_size);
-    }
-
-    // 4. Inicializar el motor de evaluación de Stockfish con ambas redes
-    try {
-        Stockfish::Probe::init(tmp_big_path.c_str(), tmp_small_path.c_str());
-        std::cout << "info string Stockfish Dual NNUE (Big: nn-b1a57edbea57 | Small: nn-baff1ede1f90) cargadas correctamente." << std::endl;
-    } catch (...) {
-        std::cerr << "Error crítico al inicializar Stockfish Probe con las redes embebidas." << std::endl;
-        std::remove(tmp_big_path.c_str());
-        std::remove(tmp_small_path.c_str());
+        initialize_flashbit();
         return 1;
     }
+    catch (const std::exception& e)
+    {
+        std::cerr << "FlashBit init error: "
+                  << e.what() << '\n';
+        return 0;
+    }
+    catch (...)
+    {
+        std::cerr << "FlashBit init error desconocido.\n";
+        return 0;
+    }
+}
 
-    // 5. Iniciar el bucle del motor UCI
-    UciEngine engine;
-    engine.run();
+EMSCRIPTEN_KEEPALIVE
+int flashbit_set_fen(const char* fen)
+{
+    if (!fen)
+        return 0;
 
-    // 6. Limpieza de archivos temporales al salir
-    std::remove(tmp_big_path.c_str());
-    std::remove(tmp_small_path.c_str());
+    try
+    {
+        initialize_flashbit();
+        g_engine.flashbit_set_fen(fen);
+        return 1;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "FlashBit FEN error: "
+                  << e.what() << '\n';
+        return 0;
+    }
+    catch (...)
+    {
+        std::cerr << "FlashBit FEN error desconocido.\n";
+        return 0;
+    }
+}
 
+EMSCRIPTEN_KEEPALIVE
+const char* flashbit_go_movetime(int milliseconds)
+{
+    static std::string result;
+
+    try
+    {
+        initialize_flashbit();
+
+        result = g_engine.flashbit_go_movetime(milliseconds);
+        return result.c_str();
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "FlashBit search error: "
+                  << e.what() << '\n';
+
+        result = "0000";
+        return result.c_str();
+    }
+    catch (...)
+    {
+        std::cerr << "FlashBit search error desconocido.\n";
+
+        result = "0000";
+        return result.c_str();
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+void flashbit_stop()
+{
+    try
+    {
+        g_engine.flashbit_stop();
+    }
+    catch (...)
+    {
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+int flashbit_eval()
+{
+    try
+    {
+        initialize_flashbit();
+        return g_engine.flashbit_eval();
+    }
+    catch (...)
+    {
+        return 0;
+    }
+}
+
+} // extern "C"
+
+int main()
+{
     return 0;
 }
+
+#else
+
+int main()
+{
+    try
+    {
+        initialize_flashbit();
+        g_engine.run();
+        return 0;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error inicializando FlashBit: "
+                  << e.what() << '\n';
+        return 1;
+    }
+    catch (...)
+    {
+        std::cerr << "Error desconocido inicializando FlashBit.\n";
+        return 1;
+    }
+}
+
+#endif

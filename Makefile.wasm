@@ -1,0 +1,213 @@
+# ============================================================================
+# FLASHBIT ENGINE - WASM / EMSCRIPTEN
+# Stockfish Probe + Dual NNUE
+#
+# Usa:
+#   src/main.cpp
+#   src/uci.cpp
+#   src/SearchController.cpp
+#
+# No se usa main_wasm.cpp.
+#
+# Salida:
+#   build-wasm/FlashBit.js
+#   build-wasm/FlashBit.wasm
+#
+# Todos los objetos WASM quedan aislados en build-wasm/
+# ============================================================================
+
+CXX := em++
+CC  := emcc
+
+STD := -std=c++17
+
+BUILD_DIR := build-wasm
+TARGET := $(BUILD_DIR)/FlashBit.js
+
+# ============================================================================
+# OPTIMIZACIÓN
+# ============================================================================
+
+OPTFLAGS := -O3 \
+            -flto \
+            -funroll-loops \
+            -finline-functions \
+            -fomit-frame-pointer \
+            -fexceptions
+
+WASMFLAGS := -msimd128
+
+# ============================================================================
+# INCLUDES
+# ============================================================================
+
+INCLUDES := -Iinclude \
+            -Isrc \
+            -Istockfish_nnue_probe \
+            -Istockfish_nnue_probe/src \
+            -Istockfish_nnue_probe/nnue
+
+# ============================================================================
+# FLAGS C++
+# ============================================================================
+
+CXXFLAGS := $(STD) \
+            $(OPTFLAGS) \
+            $(WASMFLAGS) \
+            -DNDEBUG \
+            -DNNUE_EMBEDDING_OFF \
+            -Wall \
+            -Wextra \
+            -MMD \
+            -MP \
+            $(INCLUDES)
+
+# ============================================================================
+# FLAGS C
+# ============================================================================
+
+CFLAGS := $(OPTFLAGS) \
+          $(WASMFLAGS) \
+          -DNDEBUG \
+          -DNNUE_EMBEDDING_OFF \
+          -Wall \
+          -Wextra \
+          -MMD \
+          -MP \
+          $(INCLUDES)
+
+# ============================================================================
+# LINK
+# ============================================================================
+
+LDFLAGS := -O3 -flto \
+           -fexceptions \
+           -msimd128 \
+           -sWASM=1 \
+           -sMODULARIZE=1 \
+           -sEXPORT_ES6=1 \
+           -sENVIRONMENT=web,worker,node \
+           -sALLOW_MEMORY_GROWTH=1 \
+           -sINITIAL_MEMORY=268435456 \
+           -sSTACK_SIZE=1048576 \
+           -sEXPORTED_RUNTIME_METHODS=ccall,cwrap \
+           -sEXPORTED_FUNCTIONS=_main,_flashbit_init,_flashbit_set_fen,_flashbit_go_movetime,_flashbit_stop,_flashbit_eval
+
+# ============================================================================
+# ENGINE
+#
+# IMPORTANTE:
+# Se incluye el main.cpp normal.
+# Se incluye uci.cpp normal.
+# NO se usa main_wasm.cpp.
+# ============================================================================
+
+SRC_ENGINE_ALL := $(wildcard src/*.cpp)
+
+SRC_ENGINE := $(filter-out \
+               src/main_wasm.cpp, \
+               $(SRC_ENGINE_ALL))
+
+# ============================================================================
+# STOCKFISH PROBE
+# ============================================================================
+
+SRC_PROBE_ALL := $(wildcard stockfish_nnue_probe/*.cpp) \
+                 $(wildcard stockfish_nnue_probe/*/*.cpp) \
+                 $(wildcard stockfish_nnue_probe/*/*/*.cpp) \
+                 $(wildcard stockfish_nnue_probe/*/*/*/*.cpp)
+
+SRC_PROBE_CPP := $(filter-out \
+                 stockfish_nnue_probe/NNUEBridge_NNUEBridge.cpp \
+                 stockfish_nnue_probe/main.cpp \
+                 stockfish_nnue_probe/tests.cpp, \
+                 $(SRC_PROBE_ALL))
+
+SRC_PROBE_C := $(filter-out \
+                stockfish_nnue_probe/incbin/%.c \
+                stockfish_nnue_probe/%/incbin/%.c, \
+                $(wildcard stockfish_nnue_probe/*.c) \
+                $(wildcard stockfish_nnue_probe/*/*.c) \
+                $(wildcard stockfish_nnue_probe/*/*/*.c))
+
+# ============================================================================
+# OBJETOS
+#
+# src/main.cpp
+#    ->
+# build-wasm/src/main.o
+#
+# src/uci.cpp
+#    ->
+# build-wasm/src/uci.o
+#
+# src/SearchController.cpp
+#    ->
+# build-wasm/src/SearchController.o
+#
+# Stockfish Probe:
+#    stockfish_nnue_probe/...
+#    ->
+#    build-wasm/stockfish_nnue_probe/...
+# ============================================================================
+
+SRC_CPP := $(SRC_ENGINE) \
+           $(SRC_PROBE_CPP)
+
+OBJ_CPP := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRC_CPP))
+OBJ_C   := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC_PROBE_C))
+
+OBJ := $(OBJ_CPP) $(OBJ_C)
+
+DEP := $(OBJ:.o=.d)
+
+# ============================================================================
+# DEFAULT
+# ============================================================================
+
+.PHONY: all clean rebuild
+
+all: $(TARGET)
+
+-include $(DEP)
+
+# ============================================================================
+# LINK
+# ============================================================================
+
+$(TARGET): $(OBJ)
+	@if not exist "$(BUILD_DIR)" mkdir "$(BUILD_DIR)"
+	@echo Enlazando FlashBit WASM + Dual NNUE...
+	$(CXX) $(CXXFLAGS) $(OBJ) -o $@ $(LDFLAGS)
+	@echo FlashBit WASM compilado correctamente.
+
+# ============================================================================
+# C++
+# ============================================================================
+
+$(BUILD_DIR)/%.o: %.cpp
+	@if not exist "$(dir $@)" mkdir "$(dir $@)"
+	@echo Compilando $<...
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# ============================================================================
+# C
+# ============================================================================
+
+$(BUILD_DIR)/%.o: %.c
+	@if not exist "$(dir $@)" mkdir "$(dir $@)"
+	@echo Compilando $<...
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# ============================================================================
+# CLEAN SOLO WASM
+# ============================================================================
+
+clean:
+	@if exist "$(BUILD_DIR)" rmdir /s /q "$(BUILD_DIR)"
+
+# ============================================================================
+# REBUILD
+# ============================================================================
+
+rebuild: clean all

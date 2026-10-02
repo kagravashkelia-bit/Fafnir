@@ -1,9 +1,11 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "chesslib.hpp"
 
@@ -19,14 +21,36 @@ public:
     SearchController(const SearchController&) = delete;
     SearchController& operator=(const SearchController&) = delete;
 
-    // Configuración de Hilos (por defecto 4, se ajusta mediante el comando UCI 'setoption name Threads')
-    void set_threads(int threads) { num_threads = std::max(1, threads); }
-    int get_threads() const { return num_threads; }
+    void set_threads(int threads) {
+        num_threads = std::max(1, threads);
+    }
 
-    void start(const chess::Board& board, int depth, int time_ms, bool infinite, int num_threads = 1);
+    int get_threads() const {
+        return num_threads;
+    }
+
+    void set_history(const std::vector<uint64_t>& history);
+
+    void start(
+        const chess::Board& board,
+        int depth,
+        int time_ms,
+        bool infinite,
+        int num_threads = 1
+    );
+
+    chess::Move search_sync(
+        const chess::Board& board,
+        int depth,
+        int time_ms,
+        bool infinite,
+        int num_threads = 1
+    );
+
     void stop();
 
 private:
     std::thread search_thread;
-    int num_threads = 4;
+    int num_threads = 1;
+    std::vector<uint64_t> current_history;
 };
