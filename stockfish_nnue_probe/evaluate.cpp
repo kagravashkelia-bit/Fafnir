@@ -53,7 +53,8 @@ Value Eval::evaluate(const Eval::NNUE::Networks&    networks,
                      const Position&                pos,
                      Eval::NNUE::AccumulatorStack&  accumulators,
                      Eval::NNUE::AccumulatorCaches& caches,
-                     int                            optimism) {
+                     int                            optimism,
+                     EvalResult*                    result) {
 
     assert(!pos.checkers());
 
@@ -71,6 +72,9 @@ Value Eval::evaluate(const Eval::NNUE::Networks&    networks,
         smallNet                   = false;
     }
 
+      if (result)
+        *result = {psqt, positional, nnue, VALUE_ZERO, smallNet};
+
     // Blend optimism and eval with nnue complexity
     int nnueComplexity = std::abs(psqt - positional);
     optimism += optimism * nnueComplexity / 468;
@@ -84,6 +88,9 @@ Value Eval::evaluate(const Eval::NNUE::Networks&    networks,
 
     // Guarantee evaluation does not hit the tablebase range
     v = std::clamp(v, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);
+
+    if (result)
+      result->value = v;
 
     return v;
 }

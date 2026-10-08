@@ -31,6 +31,7 @@
 std::atomic<bool> stop_search(false);
 
 chess::Move last_best_move = chess::Move::NO_MOVE;
+chess::Move last_ponder_move = chess::Move::NO_MOVE;
 
 std::mutex cout_mutex;
 
@@ -50,6 +51,13 @@ void sync_cout(const std::string& text)
 
 namespace
 {
+
+struct RootVariation
+{
+    int score;
+    chess::Move move;
+    std::vector<chess::Move> pv;
+};
 
 // ============================================================================
 // OBTENER PV EN FORMATO UCI
@@ -90,6 +98,8 @@ void helper_thread_worker(
     chess::Board board,
     int max_depth)
 {
+    int previous_score = 0;
+
     for (int current_depth = 1;
          current_depth <= max_depth;
          ++current_depth)
@@ -101,7 +111,7 @@ void helper_thread_worker(
 
         try
         {
-            negamax(
+            const int score = negamax(
                 worker,
                 search_board,
                 current_depth,
@@ -109,6 +119,11 @@ void helper_thread_worker(
                 100000,
                 0
             );
+
+            worker.optimism = apply_aggressivity_to_optimism(
+                (score - previous_score) / 2
+            );
+            previous_score = score;
         }
         catch (const SearchAbortedException&)
         {
@@ -133,7 +148,9 @@ chess::Move iterative_deepening(
     int max_time_ms,
     bool infinite,
     int num_threads,
-    const std::vector<uint64_t>& history)
+    const std::vector<uint64_t>& history,
+    int multipv,
+    bool ponder)
 {
     // ------------------------------------------------------------------------
     // PROFUNDIDAD
@@ -168,6 +185,8 @@ chess::Move iterative_deepening(
 
     last_best_move =
         chess::Move::NO_MOVE;
+    last_ponder_move =
+        chess::Move::NO_MOVE;
 
     stop_search.store(
         false,
@@ -198,7 +217,8 @@ chess::Move iterative_deepening(
 
     init_search_time(
         max_time_ms,
-        infinite
+        infinite,
+        ponder
     );
 
     // ------------------------------------------------------------------------
@@ -267,6 +287,8 @@ chess::Move iterative_deepening(
     // ITERATIVE DEEPENING
     // ------------------------------------------------------------------------
 
+    int previous_root_score = 0;
+
     for (int current_depth = 1;
          current_depth <= max_depth;
          ++current_depth)
@@ -306,90 +328,160 @@ chess::Move iterative_deepening(
         chess::Move current_depth_best =
             chess::Move::NO_MOVE;
 
-        // ------------------------------------------------------------
-        // RESEARCH
-        // ------------------------------------------------------------
+        std::vector<RootVariation> root_variations;
 
-        while (true)
+        if (multipv > 1)
         {
-            if (stop_search.load(
-                    std::memory_order_relaxed))
+            root_variations.reserve(
+                static_cast<std::size_t>(initial_moves.size())
+            );
+
+            for (int move_index = 0;
+                 move_index < initial_moves.size();
+                 ++move_index)
             {
-                search_failed = true;
+                if (stop_search.load(std::memory_order_relaxed))
+                {
+                    search_failed = true;
+                    break;
+                }
+
+                const chess::Move root_move = initial_moves[move_index];
+                chess::Board search_board = board;
+                search_board.makeMove(root_move);
+                rubi_sync(search_board);
+                workers[0].pos_history.push_back(search_board.hash());
+
+                int root_score = 0;
+                try
+                {
+                    root_score = -negamax(
+                        workers[0],
+                        search_board,
+                        current_depth - 1,
+                        -100000,
+                        100000,
+                        1
+                    );
+                }
+                catch (const SearchAbortedException&)
+                {
+                    search_failed = true;
+                }
+
+                workers[0].pos_history.pop_back();
+                rubi_sync(board);
+
+                if (search_failed)
+                    break;
+
+                RootVariation variation{
+                    root_score,
+                    root_move,
+                    {root_move}
+                };
+
+                const int child_pv_length =
+                    std::min(workers[0].pv_length[1], MAX_PLY - 1);
+                for (int pv_index = 0;
+                     pv_index < child_pv_length;
+                     ++pv_index)
+                {
+                    const chess::Move pv_move =
+                        workers[0].pv_table[1][pv_index];
+                    if (pv_move == chess::Move::NO_MOVE)
+                        break;
+                    variation.pv.push_back(pv_move);
+                }
+
+                root_variations.push_back(std::move(variation));
+            }
+
+            if (!search_failed)
+            {
+                std::stable_sort(
+                    root_variations.begin(),
+                    root_variations.end(),
+                    [](const RootVariation& left,
+                       const RootVariation& right) {
+                        return left.score > right.score;
+                    }
+                );
+
+                if (!root_variations.empty())
+                {
+                    score = root_variations.front().score;
+                    current_depth_best = root_variations.front().move;
+
+                    workers[0].pv_length[0] = static_cast<int>(
+                        std::min(root_variations.front().pv.size(),
+                                 static_cast<std::size_t>(MAX_PLY))
+                    );
+                    for (int pv_index = 0;
+                         pv_index < workers[0].pv_length[0];
+                         ++pv_index)
+                    {
+                        workers[0].pv_table[0][pv_index] =
+                            root_variations.front().pv[
+                                static_cast<std::size_t>(pv_index)];
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Preserve the original single-PV search path and its NPS.
+            while (true)
+            {
+                if (stop_search.load(
+                        std::memory_order_relaxed))
+                {
+                    search_failed = true;
+                    break;
+                }
+
+                chess::Board search_board = board;
+
+                try
+                {
+                    score = negamax(
+                        workers[0],
+                        search_board,
+                        current_depth,
+                        alpha,
+                        beta,
+                        0
+                    );
+                }
+                catch (const SearchAbortedException&)
+                {
+                    search_failed = true;
+                    break;
+                }
+
+                if (score <= alpha)
+                {
+                    alpha = std::max(-100000, alpha - delta);
+                    delta += delta / 2;
+                    continue;
+                }
+
+                if (score >= beta)
+                {
+                    beta = std::min(100000, beta + delta);
+                    delta += delta / 2;
+                    continue;
+                }
+
+                if (workers[0].pv_length[0] > 0)
+                    current_depth_best = workers[0].pv_table[0][0];
+
+                if (current_depth_best == chess::Move::NO_MOVE
+                    && !initial_moves.empty())
+                    current_depth_best = initial_moves[0];
+
                 break;
             }
-
-            chess::Board search_board = board;
-
-            try
-            {
-                score = negamax(
-                    workers[0],
-                    search_board,
-                    current_depth,
-                    alpha,
-                    beta,
-                    0
-                );
-            }
-            catch (const SearchAbortedException&)
-            {
-                search_failed = true;
-                break;
-            }
-
-            // --------------------------------------------------------
-            // FAIL LOW
-            // --------------------------------------------------------
-
-            if (score <= alpha)
-            {
-                alpha = std::max(
-                    -100000,
-                    alpha - delta
-                );
-
-                delta += delta / 2;
-                continue;
-            }
-
-            // --------------------------------------------------------
-            // FAIL HIGH
-            // --------------------------------------------------------
-
-            if (score >= beta)
-            {
-                beta = std::min(
-                    100000,
-                    beta + delta
-                );
-
-                delta += delta / 2;
-                continue;
-            }
-
-            // --------------------------------------------------------
-            // BÚSQUEDA COMPLETADA
-            // --------------------------------------------------------
-
-            if (workers[0].pv_length[0] > 0)
-            {
-                current_depth_best =
-                    workers[0].pv_table[0][0];
-            }
-
-            if (
-                current_depth_best ==
-                    chess::Move::NO_MOVE
-                &&
-                !initial_moves.empty()
-            )
-            {
-                current_depth_best =
-                    initial_moves[0];
-            }
-
-            break;
         }
 
         // ------------------------------------------------------------
@@ -429,6 +521,16 @@ chess::Move iterative_deepening(
                 current_depth_best;
         }
 
+        last_ponder_move =
+            workers[0].pv_length[0] > 1
+                ? workers[0].pv_table[0][1]
+                : chess::Move::NO_MOVE;
+
+        workers[0].optimism = apply_aggressivity_to_optimism(
+            (score - previous_root_score) / 2
+        );
+        previous_root_score = score;
+
         // ------------------------------------------------------------
         // ESTADÍSTICAS
         // ------------------------------------------------------------
@@ -444,11 +546,16 @@ chess::Move iterative_deepening(
         const auto now =
             std::chrono::high_resolution_clock::now();
 
+        const auto search_start =
+            search_uses_ponder
+                ? search_start_time_snapshot()
+                : search_start_time;
+
         const auto elapsed_ms =
             std::chrono::duration_cast<
                 std::chrono::milliseconds
             >(
-                now - search_start_time
+                now - search_start
             ).count();
 
         const uint64_t nps =
@@ -465,55 +572,79 @@ chess::Move iterative_deepening(
         // PV
         // ------------------------------------------------------------
 
-        const std::string pv_line =
-            get_pv_string(workers[0]);
-
-        // ------------------------------------------------------------
-        // INFO UCI
-        // ------------------------------------------------------------
-
-        std::stringstream info;
-
-        info << "info depth "
-             << current_depth
-
-             << " seldepth "
-             << workers[0].sel_depth
-
-             << " score "
-             << format_score_uci(score)
-
-             << " nodes "
-             << nodos_totales
-
-             << " nps "
-             << nps
-
-             << " time "
-             << elapsed_ms;
-
-        if (!pv_line.empty())
+        if (multipv > 1)
         {
-            info << " pv "
-                 << pv_line;
+            const std::size_t variation_count = std::min(
+                root_variations.size(),
+                static_cast<std::size_t>(multipv)
+            );
+            for (std::size_t i = 0; i < variation_count; ++i)
+            {
+                std::stringstream info;
+                info << "info depth " << current_depth
+                     << " seldepth " << workers[0].sel_depth
+                     << " multipv " << i + 1
+                     << " score " << format_score_uci(root_variations[i].score)
+                     << " nodes " << nodos_totales
+                     << " nps " << nps
+                     << " time " << elapsed_ms
+                     << " pv";
+                for (const chess::Move& move : root_variations[i].pv)
+                    info << ' ' << chess::uci::moveToUci(move);
+                sync_cout(info.str());
+            }
         }
-        else if (
-            best_move !=
-            chess::Move::NO_MOVE
-        )
+        else
         {
-            info << " pv "
-                 << chess::uci::moveToUci(
-                        best_move
-                    );
-        }
+            const std::string pv_line =
+                get_pv_string(workers[0]);
 
-        sync_cout(info.str());
+            std::stringstream info;
+
+            info << "info depth "
+                 << current_depth
+
+                 << " seldepth "
+                 << workers[0].sel_depth
+
+                 << " score "
+                 << format_score_uci(score)
+
+                 << " nodes "
+                 << nodos_totales
+
+                 << " nps "
+                 << nps
+
+                 << " time "
+                 << elapsed_ms;
+
+            if (!pv_line.empty())
+            {
+                info << " pv "
+                     << pv_line;
+            }
+            else if (
+                best_move !=
+                chess::Move::NO_MOVE
+            )
+            {
+                info << " pv "
+                     << chess::uci::moveToUci(
+                            best_move
+                        );
+            }
+
+            sync_cout(info.str());
+        }
     }
 
     // ------------------------------------------------------------------------
     // DETENER HELPERS
     // ------------------------------------------------------------------------
+
+    if (ponder)
+        wait_for_ponderhit();
 
     stop_search.store(
         true,
@@ -584,13 +715,15 @@ chess::Move SearchController::search_sync(
     int depth,
     int time_ms,
     bool infinite,
-    int num_threads)
+    int num_threads,
+    int multipv)
 {
     // ------------------------------------------------------------------------
     // DETENER BÚSQUEDA ANTERIOR
     // ------------------------------------------------------------------------
 
     stop();
+    ponderhit_requested.store(false, std::memory_order_relaxed);
 
     // ------------------------------------------------------------------------
     // COPIA ESTABLE DEL HISTORIAL
@@ -626,7 +759,9 @@ chess::Move SearchController::search_sync(
             time_ms,
             infinite,
             num_threads,
-            history_snapshot
+            history_snapshot,
+            multipv,
+            false
         );
 
     // ------------------------------------------------------------------------
@@ -653,9 +788,12 @@ void SearchController::start(
     int depth,
     int time_ms,
     bool infinite,
-    int num_threads)
+    int num_threads,
+    int multipv,
+    bool ponder)
 {
     stop();
+    ponderhit_requested.store(false, std::memory_order_relaxed);
 
     stop_search.store(
         false,
@@ -682,7 +820,9 @@ void SearchController::start(
             time_ms,
             infinite,
             1,
-            history_snapshot
+            history_snapshot,
+            multipv,
+            ponder
         );
 
     const chess::Move final_move =
@@ -701,6 +841,8 @@ void SearchController::start(
                       )
                     : "0000"
               );
+    if (last_ponder_move != chess::Move::NO_MOVE)
+        output << " ponder " << chess::uci::moveToUci(last_ponder_move);
 
     sync_cout(output.str());
 
@@ -718,6 +860,8 @@ void SearchController::start(
              time_ms,
              infinite,
              num_threads,
+             multipv,
+             ponder,
              history_snapshot]() mutable
             {
                 const chess::Move best_move =
@@ -727,7 +871,9 @@ void SearchController::start(
                         time_ms,
                         infinite,
                         num_threads,
-                        history_snapshot
+                        history_snapshot,
+                        multipv,
+                        ponder
                     );
 
                 const chess::Move final_move =
@@ -747,6 +893,9 @@ void SearchController::start(
                                   )
                                 : "0000"
                           );
+                if (last_ponder_move != chess::Move::NO_MOVE)
+                    output << " ponder "
+                           << chess::uci::moveToUci(last_ponder_move);
 
                 sync_cout(
                     output.str()
@@ -755,6 +904,11 @@ void SearchController::start(
         );
 
 #endif
+}
+
+void SearchController::ponderhit()
+{
+    ponderhit_requested.store(true, std::memory_order_relaxed);
 }
 
 // ============================================================================

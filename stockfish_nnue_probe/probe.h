@@ -9,14 +9,26 @@ namespace Stockfish {
     namespace Probe {
         extern std::unique_ptr<Eval::NNUE::Networks> networks;
         void init(const char*, const char*);
-        int eval(const char *fen);
-        int eval(const int pieceBoard[], bool side, int rule50);
-        int eval(const int pieces[], const int squares[], int pieceAmount, bool side, int rule50);
+        int eval(const char *fen, int optimism = 0);
+        int eval(const int pieceBoard[], bool side, int rule50, int optimism = 0);
+        int eval(const int pieces[], const int squares[], int pieceAmount, bool side, int rule50, int optimism = 0);
                 struct RawEval {
             int psqt;
             int positional;
             int nnue;
         };
+
+                struct Evaluation {
+                    int psqt;
+                    int positional;
+                    int nnue;
+                    int value;
+                    bool smallNet;
+                };
+
+                Evaluation eval_detailed(const char* fen, int optimism = 0);
+                Evaluation eval_detailed(const int pieceBoard[], bool side, int rule50, int optimism = 0);
+                Evaluation eval_detailed(const int pieces[], const int squares[], int pieceAmount, bool side, int rule50, int optimism = 0);
 
         RawEval raw_eval(const char* fen);
         RawEval raw_eval(

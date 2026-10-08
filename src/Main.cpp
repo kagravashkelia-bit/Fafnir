@@ -3,7 +3,7 @@
 #include <string>
 
 #include "uci.hpp"
-#include "probe.h"
+#include "sfdev_probe.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -19,10 +19,7 @@ void initialize_flashbit()
     if (g_flashbit_initialized)
         return;
 
-    Stockfish::Probe::init(
-        "nn-49c1193b131c.nnue",
-        "nn-37f18f62d772.nnue"
-    );
+    Stockfish::Probe::init();
 
     g_flashbit_initialized = true;
 }

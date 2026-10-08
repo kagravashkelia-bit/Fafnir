@@ -41,19 +41,28 @@ inline ProbeTLS& context() noexcept
 [[gnu::always_inline]]
 inline int evaluate_position(
     Position& pos,
-    StateInfo& state) noexcept
+    StateInfo& state,
+    int optimism,
+    Evaluation* details = nullptr) noexcept
 {
     auto& ctx = context();
 
     ctx.accumulators->reset();
 
-    return Eval::evaluate(
+    Eval::EvalResult result;
+    const int value = Eval::evaluate(
         *networks,
         pos,
         *ctx.accumulators,
         *ctx.caches,
-        VALUE_ZERO
+        optimism,
+        details ? &result : nullptr
     );
+
+    if (details)
+        *details = {result.psqt, result.positional, result.nnue, value, result.smallNet};
+
+    return value;
 }
 
 [[gnu::always_inline]]
@@ -140,14 +149,25 @@ void init(const char* bigNetFile, const char* smallNetFile)
 }
 
 
-int eval(const char* fen)
+int eval(const char* fen, int optimism)
 {
     Position pos;
     StateInfo state;
 
     pos.set(fen, &state);
 
-    return evaluate_position(pos, state);
+    return evaluate_position(pos, state, optimism);
+}
+
+Evaluation eval_detailed(const char* fen, int optimism)
+{
+    Position pos;
+    StateInfo state;
+    Evaluation result{};
+
+    pos.set(fen, &state);
+    evaluate_position(pos, state, optimism, &result);
+    return result;
 }
 
 RawEval raw_eval(const char* fen)
@@ -161,7 +181,7 @@ RawEval raw_eval(const char* fen)
 }
 
 
-int eval(const int pieceBoard[], bool side, int rule50)
+int eval(const int pieceBoard[], bool side, int rule50, int optimism)
 {
     Position pos;
     StateInfo state;
@@ -173,7 +193,18 @@ int eval(const int pieceBoard[], bool side, int rule50)
         &state
     );
 
-    return evaluate_position(pos, state);
+    return evaluate_position(pos, state, optimism);
+}
+
+Evaluation eval_detailed(const int pieceBoard[], bool side, int rule50, int optimism)
+{
+    Position pos;
+    StateInfo state;
+    Evaluation result{};
+
+    pos.set(pieceBoard, side, rule50, &state);
+    evaluate_position(pos, state, optimism, &result);
+    return result;
 }
 
 RawEval raw_eval(
@@ -200,7 +231,8 @@ int eval(
     const int squares[],
     int pieceAmount,
     bool side,
-    int rule50)
+    int rule50,
+    int optimism)
 {
     Position pos;
     StateInfo state;
@@ -214,7 +246,24 @@ int eval(
         &state
     );
 
-    return evaluate_position(pos, state);
+    return evaluate_position(pos, state, optimism);
+}
+
+Evaluation eval_detailed(
+    const int pieces[],
+    const int squares[],
+    int pieceAmount,
+    bool side,
+    int rule50,
+    int optimism)
+{
+    Position pos;
+    StateInfo state;
+    Evaluation result{};
+
+    pos.set(pieces, squares, pieceAmount, side, rule50, &state);
+    evaluate_position(pos, state, optimism, &result);
+    return result;
 }
 
 RawEval raw_eval(

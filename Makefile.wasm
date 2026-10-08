@@ -1,6 +1,6 @@
 # ============================================================================
 # FLASHBIT ENGINE - WASM / EMSCRIPTEN
-# Stockfish Probe + Dual NNUE
+# Stockfish dev SFNNv17 NNUE probe + single embedded net
 #
 # Usa:
 #   src/main.cpp
@@ -30,6 +30,7 @@ TARGET := $(BUILD_DIR)/FlashBit.js
 
 OPTFLAGS := -O3 \
             -flto \
+            -Wa,-I. \
             -funroll-loops \
             -finline-functions \
             -fomit-frame-pointer \
@@ -44,8 +45,7 @@ WASMFLAGS := -msimd128
 INCLUDES := -Iinclude \
             -Isrc \
             -Istockfish_nnue_probe \
-            -Istockfish_nnue_probe/src \
-            -Istockfish_nnue_probe/nnue
+            -Istockfish_nnue_probe/sfdev/src
 
 # ============================================================================
 # FLAGS C++
@@ -54,8 +54,10 @@ INCLUDES := -Iinclude \
 CXXFLAGS := $(STD) \
             $(OPTFLAGS) \
             $(WASMFLAGS) \
-            -DNDEBUG \
             -DNNUE_EMBEDDING_OFF \
+            -DNDEBUG \
+            -ffunction-sections \
+            -fdata-sections \
             -Wall \
             -Wextra \
             -MMD \
@@ -69,7 +71,8 @@ CXXFLAGS := $(STD) \
 CFLAGS := $(OPTFLAGS) \
           $(WASMFLAGS) \
           -DNDEBUG \
-          -DNNUE_EMBEDDING_OFF \
+          -ffunction-sections \
+          -fdata-sections \
           -Wall \
           -Wextra \
           -MMD \
@@ -81,6 +84,8 @@ CFLAGS := $(OPTFLAGS) \
 # ============================================================================
 
 LDFLAGS := -O3 -flto \
+           -Wl,--gc-sections \
+           --embed-file nn-252f33942263.nnue@/nn-252f33942263.nnue \
            -fexceptions \
            -msimd128 \
            -sWASM=1 \
@@ -109,26 +114,22 @@ SRC_ENGINE := $(filter-out \
                $(SRC_ENGINE_ALL))
 
 # ============================================================================
-# STOCKFISH PROBE
+# STOCKFISH DEV NNUE PROBE
 # ============================================================================
 
-SRC_PROBE_ALL := $(wildcard stockfish_nnue_probe/*.cpp) \
-                 $(wildcard stockfish_nnue_probe/*/*.cpp) \
-                 $(wildcard stockfish_nnue_probe/*/*/*.cpp) \
-                 $(wildcard stockfish_nnue_probe/*/*/*/*.cpp)
-
-SRC_PROBE_CPP := $(filter-out \
-                 stockfish_nnue_probe/NNUEBridge_NNUEBridge.cpp \
-                 stockfish_nnue_probe/main.cpp \
-                 stockfish_nnue_probe/tests.cpp, \
-                 $(SRC_PROBE_ALL))
-
-SRC_PROBE_C := $(filter-out \
-                stockfish_nnue_probe/incbin/%.c \
-                stockfish_nnue_probe/%/incbin/%.c, \
-                $(wildcard stockfish_nnue_probe/*.c) \
-                $(wildcard stockfish_nnue_probe/*/*.c) \
-                $(wildcard stockfish_nnue_probe/*/*/*.c))
+SFDEV_SRC := stockfish_nnue_probe/sfdev/src
+SRC_PROBE_CPP := stockfish_nnue_probe/sfdev_probe.cpp \
+                 $(SFDEV_SRC)/attacks.cpp \
+                 $(SFDEV_SRC)/bitboard.cpp \
+                 $(SFDEV_SRC)/position.cpp \
+                 $(SFDEV_SRC)/misc.cpp \
+                 $(SFDEV_SRC)/nnue/network.cpp \
+                 $(SFDEV_SRC)/nnue/nnue_accumulator.cpp \
+                 $(SFDEV_SRC)/nnue/nnue_misc.cpp \
+                 $(SFDEV_SRC)/nnue/features/full_threats.cpp \
+                 $(SFDEV_SRC)/nnue/features/half_ka_v2_hm.cpp \
+                 $(SFDEV_SRC)/nnue/features/pp_3wide.cpp
+SRC_PROBE_C :=
 
 # ============================================================================
 # OBJETOS
@@ -175,9 +176,9 @@ all: $(TARGET)
 # LINK
 # ============================================================================
 
-$(TARGET): $(OBJ)
+$(TARGET): $(OBJ) nn-252f33942263.nnue
 	@if not exist "$(BUILD_DIR)" mkdir "$(BUILD_DIR)"
-	@echo Enlazando FlashBit WASM + Dual NNUE...
+	@echo Enlazando FlashBit WASM + SFNNv17...
 	$(CXX) $(CXXFLAGS) $(OBJ) -o $@ $(LDFLAGS)
 	@echo FlashBit WASM compilado correctamente.
 
@@ -189,6 +190,8 @@ $(BUILD_DIR)/%.o: %.cpp
 	@if not exist "$(dir $@)" mkdir "$(dir $@)"
 	@echo Compilando $<...
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/$(SFDEV_SRC)/nnue/network.o: nn-252f33942263.nnue
 
 # ============================================================================
 # C
