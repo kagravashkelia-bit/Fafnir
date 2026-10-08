@@ -36,7 +36,9 @@ public:
         int depth,
         int time_ms,
         bool infinite,
-        int num_threads = 1
+        int num_threads = 1,
+        int multipv = 1,
+        bool ponder = false
     );
 
     chess::Move search_sync(
@@ -44,9 +46,11 @@ public:
         int depth,
         int time_ms,
         bool infinite,
-        int num_threads = 1
+        int num_threads = 1,
+        int multipv = 1
     );
 
+    void ponderhit();
     void stop();
 
 private:

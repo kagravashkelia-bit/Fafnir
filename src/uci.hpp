@@ -10,7 +10,7 @@
 
 class UciEngine {
 public:
-    UciEngine() = default;
+    UciEngine();
     ~UciEngine() = default;
 
     UciEngine(const UciEngine&) = delete;
@@ -21,6 +21,7 @@ public:
 
     void handle_position(std::stringstream& command);
     void handle_go(std::stringstream& command);
+    std::string handle_setoption(std::stringstream& command);
 
     std::string command_sync(const std::string& line);
 
@@ -37,4 +38,10 @@ private:
     std::atomic<bool> is_running{false};
 
     int num_threads = 1;
+    int multipv = 1;
+    int hash_size_mb = 16;
+    int move_overhead_ms = 50;
+    std::string syzygy_path;
+    std::string opening_book_file;
+    bool own_book = false;
 };

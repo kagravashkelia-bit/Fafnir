@@ -1,6 +1,6 @@
 # ============================================================================
 # FLASHBIT ENGINE - MAKEFILE NATIVO
-# Stockfish Probe + Dual NNUE embebida desde evaluate.cpp
+# Stockfish dev SFNNv17 NNUE probe + red unica embebida
 # ============================================================================
 
 CXX := g++
@@ -15,6 +15,8 @@ STD := -std=c++17
 OPTFLAGS := -O3 \
             -march=native \
             -flto=auto \
+            -ffunction-sections \
+            -fdata-sections \
             -funroll-loops \
             -finline-functions \
             -fomit-frame-pointer \
@@ -24,14 +26,12 @@ OPTFLAGS := -O3 \
             -DUSE_BMI1 \
             -DUSE_BMI2 \
             -DUSE_AVX2 \
-            -DUSE_AVX512 \
             -Wa,-I.
 
 INCLUDES := -Iinclude \
             -Isrc \
             -Istockfish_nnue_probe \
-            -Istockfish_nnue_probe/src \
-            -Istockfish_nnue_probe/nnue
+            -Istockfish_nnue_probe/sfdev/src
 
 CXXFLAGS := $(STD) \
             $(OPTFLAGS) \
@@ -63,28 +63,22 @@ LDFLAGS := $(OPTFLAGS) \
 SRC_ENGINE := $(wildcard src/*.cpp)
 
 # ============================================================================
-# FUENTES STOCKFISH PROBE
+# FUENTES DEL PROBE NNUE STOCKFISH DEV
 # ============================================================================
 
-SRC_PROBE_ALL := $(wildcard stockfish_nnue_probe/*.cpp) \
-                 $(wildcard stockfish_nnue_probe/*/*.cpp) \
-                 $(wildcard stockfish_nnue_probe/*/*/*.cpp) \
-                 $(wildcard stockfish_nnue_probe/*/*/*/*.cpp)
-
-SRC_PROBE_CPP := $(filter-out \
-                 stockfish_nnue_probe/NNUEBridge_NNUEBridge.cpp \
-                 stockfish_nnue_probe/main.cpp \
-                 stockfish_nnue_probe/tests.cpp \
-                 stockfish_nnue_probe/incbin/%.cpp \
-                 stockfish_nnue_probe/%/incbin/%.cpp, \
-                 $(SRC_PROBE_ALL))
-
-SRC_PROBE_C := $(filter-out \
-                stockfish_nnue_probe/incbin/%.c \
-                stockfish_nnue_probe/%/incbin/%.c, \
-                $(wildcard stockfish_nnue_probe/*.c) \
-                $(wildcard stockfish_nnue_probe/*/*.c) \
-                $(wildcard stockfish_nnue_probe/*/*/*.c))
+SFDEV_SRC := stockfish_nnue_probe/sfdev/src
+SRC_PROBE_CPP := stockfish_nnue_probe/sfdev_probe.cpp \
+                 $(SFDEV_SRC)/attacks.cpp \
+                 $(SFDEV_SRC)/bitboard.cpp \
+                 $(SFDEV_SRC)/position.cpp \
+                 $(SFDEV_SRC)/misc.cpp \
+                 $(SFDEV_SRC)/nnue/network.cpp \
+                 $(SFDEV_SRC)/nnue/nnue_accumulator.cpp \
+                 $(SFDEV_SRC)/nnue/nnue_misc.cpp \
+                 $(SFDEV_SRC)/nnue/features/full_threats.cpp \
+                 $(SFDEV_SRC)/nnue/features/half_ka_v2_hm.cpp \
+                 $(SFDEV_SRC)/nnue/features/pp_3wide.cpp
+SRC_PROBE_C :=
 
 # ============================================================================
 # OBJETOS
@@ -133,9 +127,11 @@ all: $(TARGET)
 # ============================================================================
 
 $(TARGET): $(OBJ)
-	@echo Enlazando FlashBit + Stockfish Probe + Dual NNUE...
+	@echo Enlazando FlashBit + probe NNUE SFNNv17...
 	$(CXX) $(CXXFLAGS) $(OBJ) -o $(TARGET) $(LDFLAGS)
 	@echo Compilacion completada con exito.
+
+$(SFDEV_SRC)/nnue/network.o: nn-252f33942263.nnue
 
 # ============================================================================
 # C++

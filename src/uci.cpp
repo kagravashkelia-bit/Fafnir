@@ -1,8 +1,11 @@
 #include "uci.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <iostream>
+#include <new>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -21,7 +24,8 @@ int calculate_time(int wtime,
                    int winc,
                    int binc,
                    int movestogo,
-                   chess::Color side_to_move) {
+                   chess::Color side_to_move,
+                   int move_overhead_ms) {
 
     int time_left =
         side_to_move == chess::Color::WHITE ? wtime : btime;
@@ -37,10 +41,46 @@ int calculate_time(int wtime,
     int time_allocated =
         (time_left / moves) + (increment * 3 / 4);
 
-    return std::max(10, time_allocated - 50);
+    return std::max(10, time_allocated - move_overhead_ms);
+}
+
+std::string uci_option_declarations() {
+    return
+        "option name Hash type spin default 16 min 1 max 1024\n"
+        "option name Threads type spin default 1 min 1 max 128\n"
+        "option name MultiPV type spin default 1 min 1 max 256\n"
+        "option name SyzygyPath type string default <empty>\n"
+        "option name OwnBook type check default false\n"
+        "option name Book File type string default <empty>\n"
+        "option name Move Overhead type spin default 50 min 0 max 5000\n"
+        "option name Aggressivity type spin default 0 min 0 max 100\n";
+}
+
+bool parse_option_integer(const std::string& value, int& result) {
+    try {
+        std::size_t parsed = 0;
+        result = std::stoi(value, &parsed);
+        return parsed == value.size();
+    } catch (const std::invalid_argument&) {
+        return false;
+    } catch (const std::out_of_range&) {
+        return false;
+    }
+}
+
+std::string lowercase(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char character) {
+                       return static_cast<char>(std::tolower(character));
+                   });
+    return value;
 }
 
 } // namespace
+
+UciEngine::UciEngine() {
+    resize_tt(static_cast<std::size_t>(hash_size_mb));
+}
 
 
 // ============================================================================
@@ -154,6 +194,74 @@ void UciEngine::handle_position(std::stringstream& command)
     search.set_history(history);
 }
 
+std::string UciEngine::handle_setoption(std::stringstream& command) {
+    search.stop();
+
+    std::string remainder;
+    std::getline(command, remainder);
+    const auto first = remainder.find_first_not_of(" \t");
+    if (first == std::string::npos || remainder.compare(first, 5, "name ") != 0)
+        return "info string malformed setoption command";
+
+    remainder.erase(0, first + 5);
+    const auto value_marker = remainder.find(" value ");
+    const std::string option_name = lowercase(
+        remainder.substr(0, value_marker)
+    );
+    const std::string value = value_marker == std::string::npos
+        ? std::string()
+        : remainder.substr(value_marker + 7);
+
+    int parsed_value = 0;
+    if (option_name == "hash") {
+        if (!parse_option_integer(value, parsed_value))
+            return "info string invalid value for Hash";
+
+        const int new_size = std::clamp(parsed_value, 1, 1024);
+        try {
+            resize_tt(static_cast<std::size_t>(new_size));
+        } catch (const std::bad_alloc&) {
+            return "info string unable to allocate requested Hash size";
+        }
+        hash_size_mb = new_size;
+    } else if (option_name == "threads") {
+        if (!parse_option_integer(value, parsed_value))
+            return "info string invalid value for Threads";
+        num_threads = std::clamp(parsed_value, 1, 128);
+    } else if (option_name == "multipv") {
+        if (!parse_option_integer(value, parsed_value))
+            return "info string invalid value for MultiPV";
+        multipv = std::clamp(parsed_value, 1, 256);
+    } else if (option_name == "move overhead") {
+        if (!parse_option_integer(value, parsed_value))
+            return "info string invalid value for Move Overhead";
+        move_overhead_ms = std::clamp(parsed_value, 0, 5000);
+    } else if (option_name == "aggressivity") {
+        if (!parse_option_integer(value, parsed_value))
+            return "info string invalid value for Aggressivity";
+        search_aggressivity = std::clamp(parsed_value, 0, 100);
+    } else if (option_name == "syzygypath") {
+        syzygy_path = value;
+        if (!value.empty())
+            return "info string SyzygyPath saved, but Syzygy probing is not implemented";
+    } else if (option_name == "book file") {
+        opening_book_file = value;
+        if (!value.empty())
+            return "info string Book File saved, but opening-book probing is not implemented";
+    } else if (option_name == "ownbook") {
+        const std::string boolean_value = lowercase(value);
+        if (boolean_value != "true" && boolean_value != "false")
+            return "info string invalid value for OwnBook";
+        own_book = boolean_value == "true";
+        if (own_book)
+            return "info string OwnBook enabled, but opening-book probing is not implemented";
+    } else {
+        return "info string unknown UCI option: " + option_name;
+    }
+
+    return "";
+}
+
 
 // ============================================================================
 // GO
@@ -176,6 +284,7 @@ void UciEngine::handle_go(std::stringstream& command)
     int movestogo = 0;
 
     bool infinite = false;
+    bool ponder = false;
     bool depth_specified = false;
 
 
@@ -224,6 +333,12 @@ void UciEngine::handle_go(std::stringstream& command)
 
             infinite = true;
         }
+
+        else if (token == "ponder") {
+
+            ponder = true;
+        }
+
     }
 
 
@@ -244,7 +359,8 @@ void UciEngine::handle_go(std::stringstream& command)
                 winc,
                 binc,
                 movestogo,
-                board.sideToMove()
+                board.sideToMove(),
+                move_overhead_ms
             );
     }
 
@@ -254,7 +370,9 @@ void UciEngine::handle_go(std::stringstream& command)
         depth,
         time_allocated,
         infinite,
-        num_threads
+        num_threads,
+        multipv,
+        ponder
     );
 }
 
@@ -373,7 +491,7 @@ int UciEngine::flashbit_eval()
 void UciEngine::main_loop()
 {
     std::cout
-        << "FlashBit 1.2 NNUE"
+        << "FlashBit 1.3"
         << std::endl;
 
 
@@ -401,13 +519,10 @@ void UciEngine::main_loop()
         if (name == "uci") {
 
             sync_cout(
-                "id name FlashBit 1.2 NNUE\n"
+                "id name FlashBit 1.3\n"
                 "id author Anthony\n"
-                "option name Hash type spin "
-                "default 16 min 1 max 1024\n"
-                "option name Threads type spin "
-                "default 1 min 1 max 128\n"
-                "uciok\n"
+                + uci_option_declarations()
+                + "uciok\n"
             );
         }
 
@@ -429,10 +544,15 @@ void UciEngine::main_loop()
         // ====================================================================
 
         else if (name == "eval") {
+            const auto evaluation = Stockfish::Probe::eval_detailed(
+                board.getFen().c_str()
+            );
 
             sync_cout(
-                format_score_uci(evaluate(board))
-                + "\n\n"
+                "info string eval "
+                + format_score_uci(evaluation.value)
+                + " nnue " + std::to_string(evaluation.nnue)
+                + " architecture SFNNv17"
             );
         }
 
@@ -513,46 +633,9 @@ void UciEngine::main_loop()
         // ====================================================================
 
         else if (name == "setoption") {
-
-            std::string token;
-            std::string opt_name;
-            std::string opt_val;
-
-
-            command >> token;
-
-
-            if (token == "name") {
-
-                command >> opt_name;
-
-                command >> token;
-
-
-                if (token == "value") {
-
-                    command >> opt_val;
-
-
-                    if (opt_name == "Threads" ||
-                        opt_name == "threads") {
-
-                        try {
-
-                            num_threads =
-                                std::clamp(
-                                    std::stoi(opt_val),
-                                    1,
-                                    128
-                                );
-                        }
-                        catch (...) {
-
-                            num_threads = 1;
-                        }
-                    }
-                }
-            }
+            const std::string response = handle_setoption(command);
+            if (!response.empty())
+                sync_cout(response);
         }
 
 
@@ -573,6 +656,11 @@ void UciEngine::main_loop()
         else if (name == "stop") {
 
             search.stop();
+        }
+
+        else if (name == "ponderhit") {
+
+            search.ponderhit();
         }
 
 
@@ -626,13 +714,10 @@ std::string UciEngine::command_sync(
     if (name == "uci") {
 
         return
-            "id name FlashBit 1.2 NNUE\n"
+            "id name FlashBit 1.3\n"
             "id author Anthony\n"
-            "option name Hash type spin "
-            "default 16 min 1 max 1024\n"
-            "option name Threads type spin "
-            "default 1 min 1 max 128\n"
-            "uciok\n";
+            + uci_option_declarations()
+            + "uciok\n";
     }
 
 
@@ -716,57 +801,18 @@ std::string UciEngine::command_sync(
         return "";
     }
 
+    if (name == "ponderhit") {
+        search.ponderhit();
+        return "";
+    }
 
 
     // ========================================================================
     // SETOPTION
     // ========================================================================
 
-    if (name == "setoption") {
-
-        std::string token;
-        std::string opt_name;
-        std::string opt_val;
-
-
-        command >> token;
-
-
-        if (token == "name") {
-
-            command >> opt_name;
-
-            command >> token;
-
-
-            if (token == "value") {
-
-                command >> opt_val;
-
-
-                if (opt_name == "Threads" ||
-                    opt_name == "threads") {
-
-                    try {
-
-                        num_threads =
-                            std::clamp(
-                                std::stoi(opt_val),
-                                1,
-                                128
-                            );
-                    }
-                    catch (...) {
-
-                        num_threads = 1;
-                    }
-                }
-            }
-        }
-
-
-        return "";
-    }
+    if (name == "setoption")
+        return handle_setoption(command);
 
 
 
@@ -839,6 +885,7 @@ std::string UciEngine::command_sync(
 
                 infinite = true;
             }
+
         }
 
 
@@ -866,7 +913,8 @@ std::string UciEngine::command_sync(
                     winc,
                     binc,
                     movestogo,
-                    board.sideToMove()
+                    board.sideToMove(),
+                    move_overhead_ms
                 );
         }
 
@@ -881,7 +929,8 @@ std::string UciEngine::command_sync(
                 depth,
                 time_allocated,
                 infinite,
-                num_threads
+                num_threads,
+                multipv
             );
 
 

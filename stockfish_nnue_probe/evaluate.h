@@ -42,6 +42,14 @@ struct AccumulatorCaches;
 class AccumulatorStack;
 }
 
+struct EvalResult {
+  Value psqt = VALUE_ZERO;
+  Value positional = VALUE_ZERO;
+  Value nnue = VALUE_ZERO;
+  Value value = VALUE_ZERO;
+  bool smallNet = false;
+};
+
 std::string trace(Position& pos, const Eval::NNUE::Networks& networks);
 
 int   simple_eval(const Position& pos);
@@ -50,7 +58,8 @@ Value evaluate(const NNUE::Networks&          networks,
                const Position&                pos,
                Eval::NNUE::AccumulatorStack&  accumulators,
                Eval::NNUE::AccumulatorCaches& caches,
-               int                            optimism);
+               int                            optimism,
+               EvalResult*                    result = nullptr);
 }  // namespace Eval
 
 }  // namespace Stockfish
