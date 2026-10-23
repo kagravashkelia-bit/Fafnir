@@ -57,7 +57,7 @@ LDFLAGS := $(OPTFLAGS) \
            -Wa,-I.
 
 # ============================================================================
-# FUENTES FLASHBIT
+# FUENTES Fafnir
 # ============================================================================
 
 SRC_ENGINE := $(wildcard src/*.cpp)
@@ -96,7 +96,7 @@ DEP := $(OBJ:.o=.d)
 
 ifeq ($(OS),Windows_NT)
 
-    TARGET  := FlashBit.exe
+    TARGET  := Fafnir.exe
     RUN_CMD := .\$(TARGET)
 
     FIXPATH = $(subst /,\,$1)
@@ -104,7 +104,7 @@ ifeq ($(OS),Windows_NT)
 
 else
 
-    TARGET  := FlashBit
+    TARGET  := Fafnir
     RUN_CMD := ./$(TARGET)
 
     FIXPATH = $1

@@ -465,7 +465,7 @@ std::string UciEngine::flashbit_go_movetime(int milliseconds)
 
 
 // ============================================================================
-// FLASHBIT - STOP
+// FAFNIR - STOP
 // ============================================================================
 
 void UciEngine::flashbit_stop()
@@ -475,7 +475,7 @@ void UciEngine::flashbit_stop()
 
 
 // ============================================================================
-// FLASHBIT - EVAL
+// FAFNIR - EVAL
 // ============================================================================
 
 int UciEngine::flashbit_eval()
@@ -491,7 +491,7 @@ int UciEngine::flashbit_eval()
 void UciEngine::main_loop()
 {
     std::cout
-        << "FlashBit 1.3"
+        << "Fafnir 2"
         << std::endl;
 
 
@@ -519,7 +519,7 @@ void UciEngine::main_loop()
         if (name == "uci") {
 
             sync_cout(
-                "id name FlashBit 1.3\n"
+                "id name Fafnir 2\n"
                 "id author Anthony\n"
                 + uci_option_declarations()
                 + "uciok\n"

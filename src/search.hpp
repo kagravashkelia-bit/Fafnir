@@ -1,5 +1,5 @@
 // =============================================================================
-//  search.hpp  --  FlashBit search + MovePicker (arquitectura de Stockfish dev)
+//  search.hpp  --  fafnir search + MovePicker (arquitectura de Stockfish dev)
 //
 //  Contenido:
 //    * TT de Stockfish (clusters de 3 entradas, generacion, reemplazo por edad)

@@ -702,8 +702,8 @@ void SearchController::set_history(
 // SEARCH SYNC
 //
 // WASM:
-//   JS -> flashbit_go_movetime()
-//      -> UciEngine::flashbit_go_movetime()
+//   JS -> fafnir_go_movetime()
+//      -> UciEngine::fafnir_go_movetime()
 //      -> SearchController::search_sync()
 //      -> iterative_deepening()
 //      -> Move

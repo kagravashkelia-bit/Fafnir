@@ -1,0 +1,27 @@
+[Event "Engine Match"]
+[Site "En Croissant"]
+[Date "2026.10.21"]
+[Round "?"]
+[White "FlashBit 1.3"]
+[Black "Reckless 0.9.0"]
+[Result "1/2-1/2"]
+[Orientation "white"]
+[Link "https://www.chess.com/analysis/game/pgn/5ektQfpHE6/analysis"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be3 Ng4 7. Bc1 Nf6 8. h3
+e5 9. Nde2 h5 10. g3 Nbd7 11. a4 Be7 12. Bg2 b6 13. O-O Bb7 14. Nd5 Nxd5 15.
+exd5 O-O 16. c4 h4 17. g4 Bg5 18. f4 exf4 $1 {[%c_effect
+f4;square;f4;type;GreatFind;size;100%25;animated;true;persistent;true]} 19. Bxf4
+Bxf4 20. Rxf4 Qg5 21. Qd2 Ne5 22. b3 Rae8 23. Nd4 Bc8 24. Rf2 Qg6 25. Nc6 Qd3
+26. Nxe5 Qxd2 27. Rxd2 Rxe5 $1 {[%c_effect
+e5;square;e5;type;GreatFind;size;100%25;animated;true;persistent;true]} 28. b4
+a5 29. bxa5 bxa5 30. Rc1 Bd7 31. c5 dxc5 32. Rxc5 Ra8 33. Rd4 Rb8 34. Rd2 Ra8
+35. Rd4 Rb8 36. Re4 Rxe4 37. Bxe4 Rb4 38. Bc2 Kf8 39. Rxa5 Ke7 40. Ra7 Kd6 41.
+a5 Rd4 42. Bb3 Rb4 43. Bc2 Rd4 44. Ra6+ Kxd5 45. Ra8 Ke5 46. Rd8 Rc4 47. Rxd7
+Rxc2 48. Rxf7 Ra2 49. Rxg7 Kf4 50. Rc7 Ra1+ 51. Kg2 Ra2+ 52. Kf1 Rxa5 53. Rc3
+Ke4 54. Ke1 Kf4 55. Kd2 Re5 56. Ra3 Re6 57. Rc3 Re5 58. Ra3 Re8 59. Rb3 Re6 60.
+Ra3 Re8 61. Rb3 Re7 62. Kc1 Rd7 63. Ra3 Rd6 64. Kc2 Ke4 65. Kc1 Rd8 66. Rb3 Rd7
+67. Ra3 Rd4 68. Kc2 Rd7 69. Kc1 Kf4 70. Kc2 Rd8 71. Kc1 Rd5 72. Kc2 Rd8 73. Rd3
+Re8 74. Kd2 Re4 75. Ra3 Re8 {[%c_effect
+f4;square;f4;type;DrawBlack;animated;true,d2;square;d2;type;DrawWhite;animated;true]}
+1/2-1/2
