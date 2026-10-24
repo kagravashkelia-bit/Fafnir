@@ -46,7 +46,7 @@ int calculate_time(int wtime,
 
 std::string uci_option_declarations() {
     return
-        "option name Hash type spin default 16 min 1 max 1024\n"
+        "option name Hash type spin default 256 min 1 max 1024\n"
         "option name Threads type spin default 1 min 1 max 128\n"
         "option name MultiPV type spin default 1 min 1 max 256\n"
         "option name SyzygyPath type string default <empty>\n"
@@ -714,7 +714,7 @@ std::string UciEngine::command_sync(
     if (name == "uci") {
 
         return
-            "id name FlashBit 1.3\n"
+            "id name Fafnir 2\n"
             "id author Anthony\n"
             + uci_option_declarations()
             + "uciok\n";

@@ -39,7 +39,7 @@ private:
 
     int num_threads = 1;
     int multipv = 1;
-    int hash_size_mb = 16;
+    int hash_size_mb = 256;
     int move_overhead_ms = 50;
     std::string syzygy_path;
     std::string opening_book_file;

@@ -11,21 +11,42 @@ STD := -std=c++17
 # ============================================================================
 # OPTIMIZACIÓN
 # ============================================================================
+#
+# ARCH=native (default) tunes the build for the machine running the compiler.
+# Use one of the portable profiles to build binaries for other people:
+#   make ARCH=x86-64-avx2            (Intel Haswell / AMD Zen or newer)
+#   make ARCH=x86-64-sse41-popcnt    (older 64-bit CPUs, slower)
+#   make ARCH=x86-64                 (baseline, SSE2 only)
+# Always run "make clean" when switching ARCH, because object files are reused.
+# ============================================================================
+
+ARCH ?= native
+
+ifeq ($(ARCH),native)
+    ARCHFLAGS := -march=native
+    ARCHDEFS  := -DUSE_SSE2 -DUSE_SSSE3 -DUSE_POPCNT -DUSE_BMI1 -DUSE_BMI2 -DUSE_AVX2
+else ifeq ($(ARCH),x86-64-avx2)
+    ARCHFLAGS := -mavx2 -mbmi -mbmi2 -mpopcnt -msse4.1 -mssse3
+    ARCHDEFS  := -DUSE_SSE2 -DUSE_SSSE3 -DUSE_POPCNT -DUSE_BMI1 -DUSE_BMI2 -DUSE_AVX2
+else ifeq ($(ARCH),x86-64-sse41-popcnt)
+    ARCHFLAGS := -msse4.1 -mpopcnt -mssse3
+    ARCHDEFS  := -DUSE_SSE2 -DUSE_SSSE3 -DUSE_POPCNT -DUSE_SSE41
+else ifeq ($(ARCH),x86-64)
+    ARCHFLAGS := -msse2
+    ARCHDEFS  := -DUSE_SSE2
+else
+    $(error Unknown ARCH '$(ARCH)'. Use native, x86-64-avx2, x86-64-sse41-popcnt or x86-64.)
+endif
 
 OPTFLAGS := -O3 \
-            -march=native \
+            $(ARCHFLAGS) \
+            $(ARCHDEFS) \
             -flto=auto \
             -ffunction-sections \
             -fdata-sections \
             -funroll-loops \
             -finline-functions \
             -fomit-frame-pointer \
-            -DUSE_SSE2 \
-            -DUSE_SSSE3 \
-            -DUSE_POPCNT \
-            -DUSE_BMI1 \
-            -DUSE_BMI2 \
-            -DUSE_AVX2 \
             -Wa,-I.
 
 INCLUDES := -Iinclude \
@@ -98,6 +119,9 @@ ifeq ($(OS),Windows_NT)
 
     TARGET  := Fafnir.exe
     RUN_CMD := .\$(TARGET)
+
+    # Link the MinGW runtime statically so the executable is self-contained.
+    LDFLAGS += -static
 
     FIXPATH = $(subst /,\,$1)
     RM_FILES = -del /f /q $(call FIXPATH,$1) 2>nul
