@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Fafnir — a UCI chess engine with SFNNv17 NNUE evaluation. Native builds for Windows and Linux, formal protocol documentation, and curated GUI recommendations.">
+  <title>Fafnir — UCI Chess Engine with NNUE Evaluation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" type="image/png" href="assets/fafnir-logo.png">
+</head>
+<body>
+
+  <!-- ==================================================================
+       GLOBAL NAV
+       ================================================================== -->
+  <nav class="global-nav" aria-label="Global navigation">
+    <div class="global-nav__inner">
+      <a href="#overview" class="global-nav__brand" aria-label="Fafnir home">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+          <path d="M13.07 9.64l2.37 2.36c.22.22.22.58 0 .8l-2.64 2.64c-.22.22-.58.22-.8 0l-2.37-2.37c-.25.14-.5.27-.77.38v3.35c0 .31-.25.57-.57.57H5.71c-.32 0-.57-.26-.57-.57v-3.35a6.6 6.6 0 01-.77-.38l-2.37 2.37c-.22.22-.58.22-.8 0L.56 12.8a.57.57 0 010-.8l2.37-2.36a6.5 6.5 0 01-.38-.77H.57A.57.57 0 010 8.29V5.71c0-.31.25-.57.57-.57h1.98A6.6 6.6 0 012.93 4.36L.56 2a.57.57 0 010-.8L3.2-1.44z" transform="translate(0 1.5)"/>
+        </svg>
+        Fafnir
+      </a>
+      <div class="global-nav__links" id="globalNavLinks">
+        <a href="#evaluation">Evaluation</a>
+        <a href="#download">Download</a>
+        <a href="#documentation">Documentation</a>
+        <a href="#guis">GUIs</a>
+        <a href="#licence">Licence</a>
+      </div>
+      <div class="global-nav__actions">
+        <a href="https://github.com/kagravashkelia-bit/Flashbit" class="global-nav__icon" target="_blank" rel="noopener" aria-label="Fafnir source repository on GitHub">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+        </a>
+        <a href="https://github.com/kagravashkelia-bit/Flashbit/releases" class="btn btn--dark-utility" target="_blank" rel="noopener">Download</a>
+        <button class="global-nav__menu" id="navToggle" aria-label="Open menu" aria-expanded="false">
+          <span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ==================================================================
+       SUB-NAV (FROSTED)
+       ================================================================== -->
+  <nav class="sub-nav" aria-label="Section navigation">
+    <div class="sub-nav__inner">
+      <a href="#overview" class="sub-nav__title">Fafnir</a>
+      <div class="sub-nav__links" id="subNavLinks">
+        <a href="#evaluation">Evaluation</a>
+        <a href="#characteristics">Engine</a>
+        <a href="#coming-soon">Coming soon</a>
+        <a href="#guis">GUIs</a>
+        <a href="#documentation">Documentation</a>
+      </div>
+      <a href="https://github.com/kagravashkelia-bit/Flashbit/releases" class="btn btn--primary btn--sm" target="_blank" rel="noopener">Download</a>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ================================================================
+         HERO — LIGHT TILE
+         ================================================================ -->
+    <section class="tile tile--light" id="overview">
+      <div class="tile__inner">
+        <h1 class="hero-display reveal">Fafnir</h1>
+        <p class="lead reveal">A UCI chess engine that searches with a single, modern neural network.</p>
+        <div class="tile__ctas reveal">
+          <a href="https://github.com/kagravashkelia-bit/Flashbit/releases" class="btn btn--primary" target="_blank" rel="noopener">Download</a>
+          <a href="https://github.com/kagravashkelia-bit/Flashbit" class="btn btn--ghost" target="_blank" rel="noopener">View source</a>
+        </div>
+        <figure class="hero-figure reveal">
+          <img src="assets/fafnir-logo.png" alt="Fafnir engine logo" width="380" height="380" class="hero-figure__img">
+        </figure>
+        <p class="hero-footnote reveal">Fafnir 2 &mdash; NNUE SFNNv17 &mdash; C++17 &mdash; Native builds for Windows and Linux.</p>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         EVALUATION — DARK TILE
+         ================================================================ -->
+    <section class="tile tile--dark tile--dark-1" id="evaluation">
+      <div class="tile__inner">
+        <p class="tile__eyebrow reveal">Evaluation</p>
+        <h2 class="display-lg reveal">One network. Every position.</h2>
+        <p class="lead-on-dark reveal">Fafnir embeds the Stockfish&nbsp;dev SFNNv17 architecture and evaluates every
+          leaf node through the <code class="inline-code inline-code--dark">nn-252f33942263.nnue</code> network,
+          compiled directly into the binary &mdash; no external files to download or configure.</p>
+        <ul class="spec-list spec-list--dark reveal">
+          <li>Single-output network without PSQT head, inlined at build time</li>
+          <li>Half-KA v2 with horizontal mirroring, plus threats feature sets</li>
+          <li>Quantised accumulator inference across all search threads</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         ENGINE CHARACTERISTICS — PARCHMENT TILE + UTILITY CARDS
+         ================================================================ -->
+    <section class="tile tile--parchment" id="characteristics">
+      <div class="tile__inner">
+        <p class="tile__eyebrow reveal">Engine</p>
+        <h2 class="display-lg reveal">Built as an instrument, not a product.</h2>
+        <div class="card-grid card-grid--3 reveal">
+          <article class="store-card">
+            <h3 class="store-card__title">Layered architecture</h3>
+            <p class="store-card__body">A strict three-tier dependency rule: the interface layer never enters the
+              search, and the engine never knows about protocols. Rules, bridges and vendored code remain fully
+              separated.</p>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">Optimised natively</h3>
+            <p class="store-card__body">Release builds are compiled with <code class="inline-code">-O3</code>,
+              link-time optimisation and explicit instruction-set support: SSE2, SSSE3, POPCNT, BMI1, BMI2 and AVX2.</p>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">Validated by regression</h3>
+            <p class="store-card__body">A reproducible EPD suite &mdash; Bratko&#8209;Kopec, Kaufman, Nolot, LCT&#8209;II
+              and Rybka &mdash; guards every change to the search before it is accepted.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         WEBASSEMBLY — COMING SOON (DARK TILE 2)
+         ================================================================ -->
+    <section class="tile tile--dark tile--dark-2" id="coming-soon">
+      <div class="tile__inner">
+        <p class="tile__eyebrow reveal">WebAssembly</p>
+        <h2 class="display-lg reveal">In the browser. Soon.</h2>
+        <p class="lead-on-dark reveal">A WebAssembly edition of Fafnir is currently in preparation. Its full
+          documentation and availability will be announced on this page.</p>
+        <p class="soon-note reveal">Coming soon</p>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         DOWNLOAD — WHITE TILE + UTILITY CARDS
+         ================================================================ -->
+    <section class="tile tile--light" id="download">
+      <div class="tile__inner">
+        <p class="tile__eyebrow reveal">Download</p>
+        <h2 class="display-lg reveal">Obtain the engine.</h2>
+        <div class="card-grid card-grid--3 reveal">
+          <article class="store-card">
+            <div class="store-card__badge">Recommended</div>
+            <h3 class="store-card__title">Native binary</h3>
+            <p class="store-card__body">Pre-built 64-bit executables for Windows and Linux, published with every
+              release. Native builds embed the NNUE network and require no additional runtime.</p>
+            <div class="store-card__links">
+              <a href="https://github.com/kagravashkelia-bit/Flashbit/releases" class="text-link" target="_blank" rel="noopener">Releases page &gt;</a>
+              <a href="https://github.com/kagravashkelia-bit/Flashbit/releases/latest" class="text-link" target="_blank" rel="noopener">Latest release &gt;</a>
+            </div>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">Build from source</h3>
+            <p class="store-card__body">Clone the repository and compile with <code class="inline-code">make</code>.
+              A C++17 toolchain is required for native builds.</p>
+            <div class="store-card__links">
+              <a href="#documentation" class="text-link">Build documentation &gt;</a>
+              <a href="https://github.com/kagravashkelia-bit/Flashbit/archive/refs/heads/main.zip" class="text-link" target="_blank" rel="noopener">Download ZIP &gt;</a>
+            </div>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">System requirements</h3>
+            <p class="store-card__body">A 64-bit operating system for native builds. No additional runtime is
+              required: the NNUE network is compiled into the executable itself.</p>
+            <div class="store-card__links">
+              <a href="#characteristics" class="text-link">Engine overview &gt;</a>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         DOCUMENTATION — DARK TILE 3
+         ================================================================ -->
+    <section class="tile tile--dark tile--dark-3" id="documentation">
+      <div class="tile__inner tile__inner--narrow">
+        <p class="tile__eyebrow reveal">Documentation</p>
+        <h2 class="display-lg reveal">Everything the protocol requires.</h2>
+
+        <div class="doc-block reveal">
+          <h3 class="tagline">Compilation</h3>
+          <div class="code-window">
+            <div class="code-window__bar"><span>Terminal</span><button class="copy-btn" aria-label="Copy to clipboard">Copy</button></div>
+            <pre class="code-window__body"><code># Native build (Windows / Linux) — output: bin/Fafnir(.exe)
+make
+
+# WebAssembly build (requires Emscripten in PATH)
+make -f Makefile.wasm
+
+# Regression suite (EPD: Bratko-Kopec, Kaufman, Nolot, LCT-II, Rybka)
+python tests/tests.py bin/Fafnir.exe --depth 18</code></pre>
+          </div>
+        </div>
+
+        <div class="doc-block reveal">
+          <h3 class="tagline">UCI commands</h3>
+          <div class="table-wrap"><table class="spec-table">
+            <thead>
+              <tr><th scope="col">Command</th><th scope="col">Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code class="inline-code inline-code--dark">uci</code></td><td>Negotiate the protocol. Replies with <code class="inline-code inline-code--dark">id name Fafnir 2</code> and <code class="inline-code inline-code--dark">uciok</code>.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">isready</code></td><td>Synchronisation handshake; answers <code class="inline-code inline-code--dark">readyok</code>.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">ucinewgame</code></td><td>Reset the transposition table and clear all search state.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">position</code></td><td>Accepts <code class="inline-code inline-code--dark">startpos</code> or a FEN string, optionally followed by a move list.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">go</code></td><td>Search control: <code class="inline-code inline-code--dark">movetime</code>, <code class="inline-code inline-code--dark">depth</code>, <code class="inline-code inline-code--dark">wtime</code>/<code class="inline-code inline-code--dark">btime</code>, increments and <code class="inline-code inline-code--dark">movestogo</code>.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">stop</code></td><td>Interrupt the running search and emit the best move immediately.</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <div class="doc-block reveal">
+          <h3 class="tagline">UCI options</h3>
+          <div class="table-wrap"><table class="spec-table">
+            <thead>
+              <tr><th scope="col">Option</th><th scope="col">Range</th><th scope="col">Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code class="inline-code inline-code--dark">Hash</code></td><td>1&ndash;1024</td><td>Transposition table size, in megabytes.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">Threads</code></td><td>1&ndash;128</td><td>Number of parallel search threads.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">MultiPV</code></td><td>1&ndash;256</td><td>Number of principal variations reported per search.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">Move Overhead</code></td><td>0&ndash;5000&nbsp;ms</td><td>Safety margin subtracted from advertised clock time.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">Aggressivity</code></td><td>0&ndash;100</td><td>Search temperament; higher values favour sharper lines.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">SyzygyPath</code></td><td>Path</td><td>Accepted for compatibility; tablebase probing is not yet implemented.</td></tr>
+              <tr><td><code class="inline-code inline-code--dark">Book File</code> / <code class="inline-code inline-code--dark">OwnBook</code></td><td>Path / bool</td><td>Accepted for compatibility; book probing is not yet implemented.</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         RECOMMENDED UCI GUIs — PARCHMENT TILE
+         ================================================================ -->
+    <section class="tile tile--parchment" id="guis">
+      <div class="tile__inner">
+        <p class="tile__eyebrow reveal">Recommended UCI GUIs</p>
+        <h2 class="display-lg reveal">Where Fafnir plays best.</h2>
+        <p class="lead-sm reveal">Fafnir speaks the standard UCI protocol and therefore operates with any
+          compliant interface. The following graphical environments are recommended.</p>
+        <div class="card-grid card-grid--3 reveal">
+          <article class="store-card">
+            <h3 class="store-card__title">En Croissant</h3>
+            <p class="store-card__body">A modern, open-source analysis and training environment for Windows,
+              macOS and Linux, with engine management, local databases and cloud analysis.</p>
+            <div class="store-card__links"><a class="text-link" href="https://encroissant.org" target="_blank" rel="noopener">Visit site &gt;</a></div>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">Cute Chess</h3>
+            <p class="store-card__body">The reference open-source suite for engine authoring: a lightweight GUI
+              and <code class="inline-code">cutechess-cli</code> for automated matches, rating gauges and SPRT testing.</p>
+            <div class="store-card__links"><a class="text-link" href="https://cutechess.com" target="_blank" rel="noopener">Visit site &gt;</a></div>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">Arena Chess GUI</h3>
+            <p class="store-card__body">A long-established Windows GUI with full UCI support, tournament
+              management, engine analysis panes and extensive time-control configuration.</p>
+            <div class="store-card__links"><a class="text-link" href="https://www.playwitharena.de" target="_blank" rel="noopener">Visit site &gt;</a></div>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">Banksia</h3>
+            <p class="store-card__body">A cross-platform open-source GUI oriented towards engine play and
+              cloud-based game exchange, available for Windows, macOS and Linux.</p>
+            <div class="store-card__links"><a class="text-link" href="https://github.com/nguyenpham/banksia" target="_blank" rel="noopener">Visit site &gt;</a></div>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">Scid vs. PC</h3>
+            <p class="store-card__body">A rigorous chess-database application with crystal-clear engine
+              windows, tournament mode and deep annotation tooling.</p>
+            <div class="store-card__links"><a class="text-link" href="https://scidvspc.sourceforge.net" target="_blank" rel="noopener">Visit site &gt;</a></div>
+          </article>
+          <article class="store-card">
+            <h3 class="store-card__title">Lucas Chess</h3>
+            <p class="store-card__body">A Windows training environment with graduated difficulties, opening
+              tutors and engine analysis &mdash; well suited to running Fafnir at reduced strength.</p>
+            <div class="store-card__links"><a class="text-link" href="https://lucaschess.pythonanywhere.com" target="_blank" rel="noopener">Visit site &gt;</a></div>
+          </article>
+        </div>
+        <div class="note-panel reveal">
+          <p class="caption-strong">Installation note</p>
+          <p class="caption">Point the GUI at <code class="inline-code">bin/Fafnir.exe</code> (Windows) or
+            <code class="inline-code">bin/Fafnir</code> (Linux). Ensure that <code class="inline-code">Threads</code>
+            matches the host machine and that <code class="inline-code">Hash</code> is allocated generously on
+            the transposition-table side.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================================================================
+       FOOTER
+       ================================================================== -->
+  <footer class="footer" id="licence">
+    <div class="footer__inner">
+      <div class="footer__columns">
+        <div class="footer__col">
+          <h3 class="footer__heading">Download</h3>
+          <ul class="footer__links">
+            <li><a href="https://github.com/kagravashkelia-bit/Flashbit/releases" target="_blank" rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/kagravashkelia-bit/Flashbit/archive/refs/heads/main.zip" target="_blank" rel="noopener">Source archive</a></li>
+          </ul>
+        </div>
+        <div class="footer__col">
+          <h3 class="footer__heading">Documentation</h3>
+          <ul class="footer__links">
+            <li><a href="#documentation">UCI commands</a></li>
+            <li><a href="#documentation">UCI options</a></li>
+            <li><a href="#coming-soon">WebAssembly &mdash; coming soon</a></li>
+          </ul>
+        </div>
+        <div class="footer__col">
+          <h3 class="footer__heading">Project</h3>
+          <ul class="footer__links">
+            <li><a href="https://github.com/kagravashkelia-bit/Flashbit" target="_blank" rel="noopener">Source repository</a></li>
+            <li><a href="https://github.com/kagravashkelia-bit/Flashbit/blob/main/third_party/VENDORED.md" target="_blank" rel="noopener">Vendored components</a></li>
+            <li><a href="#guis">Recommended GUIs</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer__legal">
+        <p>Fafnir is free software. The vendored Stockfish development snapshot is distributed under the
+          GNU&nbsp;General&nbsp;Public&nbsp;License&nbsp;v3; the chess rules library (ChessLib) is distributed under
+          the MIT&nbsp;Licence. The NNUE network <code class="inline-code">nn-252f33942263.nnue</code> is the default
+          network of the vendored snapshot. Full licence texts and provenance are documented in
+          <a href="https://github.com/kagravashkelia-bit/Flashbit/blob/main/third_party/VENDORED.md" target="_blank" rel="noopener">third_party/VENDORED.md</a>.</p>
+        <p class="footer__copy">Copyright &copy; 2026 &mdash; Fafnir Engine. Author: Anthony. Engine identity string: &ldquo;Fafnir 2&rdquo;. UCI-compatible.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
