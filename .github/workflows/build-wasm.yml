@@ -36,7 +36,10 @@ jobs:
           fi
 
           # 2. Búsqueda de fuentes C++
-          SRC_ENGINE=$(find src/ui src/engine src/bridges -type f -name "*.cpp")
+          #    java_api.cpp requiere JNI (jni.h) y no puede compilarse en
+          #    WASM: el puente JNI sólo es nativo de escritorio.
+          SRC_ENGINE=$(find src/ui src/engine -type f -name "*.cpp")
+          SRC_BRIDGES=$(find src/bridges -type f -name "*.cpp" ! -name "java_api*")
           SRC_PROBE=$(find third_party/stockfish -type f -name "*.cpp" \
             ! -path "*/universal/*")
 
@@ -45,7 +48,7 @@ jobs:
           echo "Archivo NNUE detectado: $NNUE_FILE"
           echo "Compilando Fafnir para WASM..."
 
-          em++ $SRC_ENGINE $SRC_PROBE \
+          em++ $SRC_ENGINE $SRC_BRIDGES $SRC_PROBE \
             -std=c++17 \
             -O3 \
             -msimd128 \

@@ -49,9 +49,6 @@ std::string uci_option_declarations() {
         "option name Hash type spin default 16 min 1 max 1024\n"
         "option name Threads type spin default 1 min 1 max 128\n"
         "option name MultiPV type spin default 1 min 1 max 256\n"
-        "option name SyzygyPath type string default <empty>\n"
-        "option name OwnBook type check default false\n"
-        "option name Book File type string default <empty>\n"
         "option name Move Overhead type spin default 50 min 0 max 5000\n"
         "option name Aggressivity type spin default 0 min 0 max 100\n";
 }
@@ -240,21 +237,6 @@ std::string UciEngine::handle_setoption(std::stringstream& command) {
         if (!parse_option_integer(value, parsed_value))
             return "info string invalid value for Aggressivity";
         search_aggressivity = std::clamp(parsed_value, 0, 100);
-    } else if (option_name == "syzygypath") {
-        syzygy_path = value;
-        if (!value.empty())
-            return "info string SyzygyPath saved, but Syzygy probing is not implemented";
-    } else if (option_name == "book file") {
-        opening_book_file = value;
-        if (!value.empty())
-            return "info string Book File saved, but opening-book probing is not implemented";
-    } else if (option_name == "ownbook") {
-        const std::string boolean_value = lowercase(value);
-        if (boolean_value != "true" && boolean_value != "false")
-            return "info string invalid value for OwnBook";
-        own_book = boolean_value == "true";
-        if (own_book)
-            return "info string OwnBook enabled, but opening-book probing is not implemented";
     } else {
         return "info string unknown UCI option: " + option_name;
     }

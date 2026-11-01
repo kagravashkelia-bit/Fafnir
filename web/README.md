@@ -3,7 +3,7 @@
 Static single-page website for the Fafnir UCI chess engine, published
 through **GitHub Pages** at:
 
-> <https://kagravashkelia-bit.github.io/Flashbit/>
+> <https://kagravashkelia-bit.github.io/Fafnir/>
 
 ## Contents
 
@@ -24,7 +24,7 @@ available through the `workflow_dispatch` trigger.
 
 No build step is required — the site is plain HTML, CSS and JavaScript with
 all asset paths relative, so it works both from the repository root and
-under a project sub-path (`/Flashbit/`).
+under a project sub-path (`/Fafnir/`).
 
 ## Editing
 

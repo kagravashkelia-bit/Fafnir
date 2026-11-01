@@ -32,12 +32,12 @@
         <a href="#licence">Licence</a>
       </div>
       <div class="global-nav__actions">
-        <a href="https://github.com/kagravashkelia-bit/Flashbit" class="global-nav__icon" target="_blank" rel="noopener" aria-label="Fafnir source repository on GitHub">
+        <a href="https://github.com/kagravashkelia-bit/Fafnir" class="global-nav__icon" target="_blank" rel="noopener" aria-label="Fafnir source repository on GitHub">
           <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>
           </svg>
         </a>
-        <a href="https://github.com/kagravashkelia-bit/Flashbit/releases" class="btn btn--dark-utility" target="_blank" rel="noopener">Download</a>
+        <a href="https://github.com/kagravashkelia-bit/Fafnir/releases" class="btn btn--dark-utility" target="_blank" rel="noopener">Download</a>
         <button class="global-nav__menu" id="navToggle" aria-label="Open menu" aria-expanded="false">
           <span></span><span></span>
         </button>
@@ -58,7 +58,7 @@
         <a href="#guis">GUIs</a>
         <a href="#documentation">Documentation</a>
       </div>
-      <a href="https://github.com/kagravashkelia-bit/Flashbit/releases" class="btn btn--primary btn--sm" target="_blank" rel="noopener">Download</a>
+      <a href="https://github.com/kagravashkelia-bit/Fafnir/releases" class="btn btn--primary btn--sm" target="_blank" rel="noopener">Download</a>
     </div>
   </nav>
 
@@ -72,8 +72,8 @@
         <h1 class="hero-display reveal">Fafnir</h1>
         <p class="lead reveal">A UCI chess engine that searches with a single, modern neural network.</p>
         <div class="tile__ctas reveal">
-          <a href="https://github.com/kagravashkelia-bit/Flashbit/releases" class="btn btn--primary" target="_blank" rel="noopener">Download</a>
-          <a href="https://github.com/kagravashkelia-bit/Flashbit" class="btn btn--ghost" target="_blank" rel="noopener">View source</a>
+          <a href="https://github.com/kagravashkelia-bit/Fafnir/releases" class="btn btn--primary" target="_blank" rel="noopener">Download</a>
+          <a href="https://github.com/kagravashkelia-bit/Fafnir" class="btn btn--ghost" target="_blank" rel="noopener">View source</a>
         </div>
         <figure class="hero-figure reveal">
           <img src="assets/fafnir-logo.png" alt="Fafnir engine logo" width="380" height="380" class="hero-figure__img">
@@ -155,17 +155,18 @@
             <p class="store-card__body">Pre-built 64-bit executables for Windows and Linux, published with every
               release. Native builds embed the NNUE network and require no additional runtime.</p>
             <div class="store-card__links">
-              <a href="https://github.com/kagravashkelia-bit/Flashbit/releases" class="text-link" target="_blank" rel="noopener">Releases page &gt;</a>
-              <a href="https://github.com/kagravashkelia-bit/Flashbit/releases/latest" class="text-link" target="_blank" rel="noopener">Latest release &gt;</a>
+              <a href="https://github.com/kagravashkelia-bit/Fafnir/releases" class="text-link" target="_blank" rel="noopener">Releases page &gt;</a>
+              <a href="https://github.com/kagravashkelia-bit/Fafnir/releases/latest" class="text-link" target="_blank" rel="noopener">Latest release &gt;</a>
             </div>
           </article>
           <article class="store-card">
             <h3 class="store-card__title">Build from source</h3>
             <p class="store-card__body">Clone the repository and compile with <code class="inline-code">make</code>.
-              A C++17 toolchain is required for native builds.</p>
+              The default target produces a safe SSE2 build for any x86_64 CPU; optimised AVX2 and
+              AVX-512 targets are also provided.</p>
             <div class="store-card__links">
               <a href="#documentation" class="text-link">Build documentation &gt;</a>
-              <a href="https://github.com/kagravashkelia-bit/Flashbit/archive/refs/heads/main.zip" class="text-link" target="_blank" rel="noopener">Download ZIP &gt;</a>
+              <a href="https://github.com/kagravashkelia-bit/Fafnir/archive/refs/heads/main.zip" class="text-link" target="_blank" rel="noopener">Download ZIP &gt;</a>
             </div>
           </article>
           <article class="store-card">
@@ -192,8 +193,15 @@
           <h3 class="tagline">Compilation</h3>
           <div class="code-window">
             <div class="code-window__bar"><span>Terminal</span><button class="copy-btn" aria-label="Copy to clipboard">Copy</button></div>
-            <pre class="code-window__body"><code># Native build (Windows / Linux) — output: bin/Fafnir(.exe)
+            <pre class="code-window__body"><code># Safe build (any x86_64 CPU) — output: bin/Fafnir(.exe)
 make
+
+# Optimised builds for specific instruction sets
+make ARCH=x86-64-sse4.2     # SSE4.2 + POPCNT    (x86-64-v2)
+make ARCH=x86-64-avx2      # AVX2 + BMI2 + POPCNT (x86-64-v3)
+make ARCH=x86-64-avx512    # AVX-512 + VNNI       (x86-64-v4)
+make ARCH=native           # tuned for this machine
+make all-arches            # all of the above, suffixed in bin/
 
 # Regression suite (EPD: Bratko-Kopec, Kaufman, Nolot, LCT-II, Rybka)
 python tests/tests.py bin/Fafnir.exe --depth 18</code></pre>
@@ -229,8 +237,6 @@ python tests/tests.py bin/Fafnir.exe --depth 18</code></pre>
               <tr><td><code class="inline-code inline-code--dark">MultiPV</code></td><td>1&ndash;256</td><td>Number of principal variations reported per search.</td></tr>
               <tr><td><code class="inline-code inline-code--dark">Move Overhead</code></td><td>0&ndash;5000&nbsp;ms</td><td>Safety margin subtracted from advertised clock time.</td></tr>
               <tr><td><code class="inline-code inline-code--dark">Aggressivity</code></td><td>0&ndash;100</td><td>Search temperament; higher values favour sharper lines.</td></tr>
-              <tr><td><code class="inline-code inline-code--dark">SyzygyPath</code></td><td>Path</td><td>Accepted for compatibility; tablebase probing is not yet implemented.</td></tr>
-              <tr><td><code class="inline-code inline-code--dark">Book File</code> / <code class="inline-code inline-code--dark">OwnBook</code></td><td>Path / bool</td><td>Accepted for compatibility; book probing is not yet implemented.</td></tr>
             </tbody>
           </table></div>
         </div>
@@ -305,8 +311,8 @@ python tests/tests.py bin/Fafnir.exe --depth 18</code></pre>
         <div class="footer__col">
           <h3 class="footer__heading">Download</h3>
           <ul class="footer__links">
-            <li><a href="https://github.com/kagravashkelia-bit/Flashbit/releases" target="_blank" rel="noopener">Releases</a></li>
-            <li><a href="https://github.com/kagravashkelia-bit/Flashbit/archive/refs/heads/main.zip" target="_blank" rel="noopener">Source archive</a></li>
+            <li><a href="https://github.com/kagravashkelia-bit/Fafnir/releases" target="_blank" rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/kagravashkelia-bit/Fafnir/archive/refs/heads/main.zip" target="_blank" rel="noopener">Source archive</a></li>
           </ul>
         </div>
         <div class="footer__col">
@@ -320,8 +326,8 @@ python tests/tests.py bin/Fafnir.exe --depth 18</code></pre>
         <div class="footer__col">
           <h3 class="footer__heading">Project</h3>
           <ul class="footer__links">
-            <li><a href="https://github.com/kagravashkelia-bit/Flashbit" target="_blank" rel="noopener">Source repository</a></li>
-            <li><a href="https://github.com/kagravashkelia-bit/Flashbit/blob/main/third_party/VENDORED.md" target="_blank" rel="noopener">Vendored components</a></li>
+            <li><a href="https://github.com/kagravashkelia-bit/Fafnir" target="_blank" rel="noopener">Source repository</a></li>
+            <li><a href="https://github.com/kagravashkelia-bit/Fafnir/blob/main/third_party/VENDORED.md" target="_blank" rel="noopener">Vendored components</a></li>
             <li><a href="#guis">Recommended GUIs</a></li>
           </ul>
         </div>
@@ -332,7 +338,7 @@ python tests/tests.py bin/Fafnir.exe --depth 18</code></pre>
           GNU&nbsp;General&nbsp;Public&nbsp;License&nbsp;v3; the chess rules library (ChessLib) is distributed under
           the MIT&nbsp;Licence. The NNUE network <code class="inline-code">nn-252f33942263.nnue</code> is the default
           network of the vendored snapshot. Full licence texts and provenance are documented in
-          <a href="https://github.com/kagravashkelia-bit/Flashbit/blob/main/third_party/VENDORED.md" target="_blank" rel="noopener">third_party/VENDORED.md</a>.</p>
+          <a href="https://github.com/kagravashkelia-bit/Fafnir/blob/main/third_party/VENDORED.md" target="_blank" rel="noopener">third_party/VENDORED.md</a>.</p>
         <p class="footer__copy">Copyright &copy; 2026 &mdash; Fafnir Engine. Author: Anthony. Engine identity string: &ldquo;Fafnir 2&rdquo;. UCI-compatible.</p>
       </div>
     </div>

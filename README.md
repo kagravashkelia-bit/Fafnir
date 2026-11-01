@@ -4,7 +4,7 @@ Motor de ajedrez UCI en C++17 con evaluación NNUE (arquitectura SFNNv17 del
 desarrollo de Stockfish), búsqueda moderna de nivel competitivo y builds
 nativos para Windows y Linux.
 
-> **Sitio web oficial:** https://kagravashkelia-bit.github.io/Flashbit/
+> **Sitio web oficial:** https://kagravashkelia-bit.github.io/Fafnir/
 > (publicado automáticamente vía GitHub Pages desde `web/`)
 
 ---
@@ -69,17 +69,21 @@ Comandos soportados: `uci`, `isready`, `ucinewgame`, `position`
 `btime`, `winc`, `binc`, `movestogo`, `ponder`, `infinite`), `stop`,
 `setoption`.
 
-Opciones (`setoption name … value …`):
+Opciones (`setoption name … value …`). El motor declara solo las opciones
+que se implementan de verdad; las opciones no implementadas responden con
+`info string unknown UCI option`:
 
-| Opción | Rango | Defecto | Descripción |
+| Opción | Rango | Defecto | Implementación |
 |---|---|---|---|
-| `Hash` | 1–1024 MB | 16 | Tamaño de la tabla de transposición. |
-| `Threads` | 1–128 | 1 | Hilos de búsqueda paralelos. |
-| `MultiPV` | 1–256 | 1 | Variaciones principales reportadas. |
-| `Move Overhead` | 0–5000 ms | 50 | Margen de seguridad sobre el reloj. |
-| `Aggressivity` | 0–100 | 0 | Temperamento de búsqueda. |
-| `SyzygyPath` | ruta | — | Se acepta; el probing SYZYGY no está implementado aún. |
-| `Book File` / `OwnBook` | ruta / bool | — | Se aceptan; el libro de aperturas no está implementado aún. |
+| `Hash` | 1–1024 MB | 16 | Real: tabla de transposición redimensionable en tiempo real. |
+| `Threads` | 1–128 | 1 | Real: Lazy SMP con helper threads (`SearchController.cpp`). |
+| `MultiPV` | 1–256 | 1 | Real: búsqueda de la raíz por variación (`search.hpp`). |
+| `Move Overhead` | 0–5000 ms | 50 | Real: margen sobre el reloj gestionado en `go`. |
+| `Aggressivity` | 0–100 | 0 | Real: optimismo aplicado a la evaluación en la búsqueda. |
+
+Tabla base y SYZYGY / libros de aperturas: **no declarados todavía** — se
+añadirán junto con su implementación real, sin anunciar opciones no
+funcionales.
 
 Cadena de identidad: `id name Fafnir 2` — `id author Anthony`.
 
@@ -87,20 +91,37 @@ Cadena de identidad: `id name Fafnir 2` — `id author Anthony`.
 
 ## Compilar
 
-Nativo (Windows/Linux), requiere un toolchain C++17 (g++):
+Nativo (Windows/Linux), requiere un toolchain C++17 (g++; clang también
+funciona con `CXX=clang++`).
+
+El objetivo por defecto construye el binario **seguro para cualquier CPU
+x86_64** (SSE2 únicamente); nunca crashea por conjunto de instrucciones, por
+más optimizada que sea la máquina de compilación:
 
     make
 
-Binario en `bin/Fafnir(.exe)` con la red NNUE embebida.
+Compilaciones por arquitectura explícita (estilo Stockfish):
+
+    make ARCH=x86-64-sse4.2     # SSE4.2 + POPCNT   (x86-64-v2)
+    make ARCH=x86-64-avx2       # AVX2 + BMI2       (x86-64-v3)
+    make ARCH=x86-64-avx512     # AVX-512 + VNNI    (x86-64-v4)
+    make ARCH=native            # sintonizada para esta máquina
+    make all-arches             # bin/Fafnir-<arch> para todas (sin plugins)
+
+Cada arquitectura compila en su propio `build/<ARCH>/`, de modo que nunca se
+mezclan flags entre binarios. Los binarios sufijados se generan en `bin/`.
+El binario `bin/Fafnir(.exe)` refleja siempre la última arquitectura usada.
 
 ### WebAssembly (en preparación)
 
     make -f Makefile.wasm
 
 Requiere Emscripten en el `PATH`. Salida en `build-wasm/Fafnir.js` +
-`Fafnir.wasm`. La publicación de la edición web está **próximamente**;
-mientras tanto, la CI compila el artefacto `Fafnir-WASM-Build` en cada
-push (ver workflow `build-wasm.yml`).
+`Fafnir.wasm`. La edición web pública sigue **en preparación**; mientras
+tanto, la CI compila el artefacto `Fafnir-WASM-Build` en cada push (el build
+fallaba desde la reorganización del código porque el workflow incluía el
+puente JNI `java_api.cpp`, que requiere JNI y no es compilable en WASM;
+el `find` del workflow ya excluye ese archivo).
 
 ---
 
@@ -117,18 +138,30 @@ tablas contra **Stockfish** y **Reckless 0.9.0** (En Croissant / Lichess).
 
 ## CI
 
+- `build-native.yml` — compila binarios nativos multi-arquitectura
+  (x86-64 seguro, SSE4.2, AVX2; Windows y Linux) en cada push, con
+  smoke test UCI, y los sube como artefactos.
 - `build-wasm.yml` — compila el WASM en cada push a `main`/`master`.
 - `deploy-pages.yml` — publica **el sitio web** (`web/`) en GitHub Pages
-  en cada cambio; URL: <https://kagravashkelia-bit.github.io/Flashbit/>.
+  en cada cambio; URL: <https://kagravashkelia-bit.github.io/Fafnir/>.
 
 ## Licencias y código vendido
 
-- **ChessLib** (Disservin, v0.9.4) — MIT.
+**Licencia del proyecto: GNU GPL v3** (ver [`LICENSE`](LICENSE) en la raíz).
+Fafnir enlaza y distribuye código vendido de Stockfish (GPL v3), por lo que el
+motor completo debe distribuirse bajo los términos de la GPL v3; el texto
+verbatim se replica en la raíz del repositorio.
+
+Desglose por componente:
+
+- **ChessLib** (Disservin, v0.9.4) — MIT, sin restricción adicional.
 - **Stockfish dev** (snapshot SFNNv17) — GPLv3; el parche local único
   está documentado.
 - **NNUE** `nn-252f33942263.nnue` — red por defecto del snapshot
-  (SHA-256 `252f33…7ab3`).
-- **incbin** (Dale Weiler) — Unlicense.
+  (SHA-256 `252f33…7ab3`), redistribuida bajo la licencia del upstream.
+- **incbin** (Dale Weiler) — Unlicense (dominio público).
+- **Sitio web** (`web/`) — puede reutilizarse como referencia conforme a
+  la GPL v3 en su conjunto del proyecto.
 
 Detalles completos y procedencia: [`third_party/VENDORED.md`](third_party/VENDORED.md).
 

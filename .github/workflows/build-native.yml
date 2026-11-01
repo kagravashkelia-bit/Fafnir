@@ -1,0 +1,92 @@
+name: Compilar binarios nativos multi-arquitectura
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'third_party/**'
+      - 'Makefile'
+      - '.github/workflows/build-native.yml'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  ENGINE_SMOKE: |
+    uci
+    isready
+    quit
+
+jobs:
+  # ---------------------------------------------------------------- Linux
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86-64, x86-64-sse4.2, x86-64-avx2]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilar ${{ matrix.arch }}
+        run: make --no-print-directory ARCH=${{ matrix.arch }}
+
+      - name: Smoke test UCI
+        run: |
+          printf '%s\n' "$ENGINE_SMOKE" | bin/Fafnir | tee smoke.log
+          grep -q "uciok" smoke.log
+          grep -q "readyok" smoke.log
+
+      - name: Empaquetar artefacto
+        shell: bash
+        run: |
+          mkdir -p dist
+          tar -czf dist/Fafnir-${{ matrix.arch }}-linux-x64.tar.gz -C bin Fafnir
+          sha256sum dist/*.tar.gz > dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fafnir-${{ matrix.arch }}-linux-x64
+          path: dist/
+
+  # --------------------------------------------------------------- Windows
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86-64, x86-64-sse4.2, x86-64-avx2]
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-toolchain make
+
+      - name: Compilar ${{ matrix.arch }}
+        run: make --no-print-directory ARCH=${{ matrix.arch }}
+
+      - name: Smoke test UCI
+        run: |
+          printf '%s\n' "$ENGINE_SMOKE" | bin/Fafnir.exe | tee smoke.log
+          grep -q "uciok" smoke.log
+          grep -q "readyok" smoke.log
+
+      - name: Empaquetar artefacto
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path bin/Fafnir.exe -DestinationPath dist/Fafnir-${{ matrix.arch }}-windows-x64.zip
+          (Get-FileHash dist\Fafnir-${{ matrix.arch }}-windows-x64.zip -Algorithm SHA256) | Format-List | Out-File dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fafnir-${{ matrix.arch }}-windows-x64
+          path: dist/
