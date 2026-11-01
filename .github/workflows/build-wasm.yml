@@ -19,34 +19,31 @@ jobs:
         with:
           version: 'latest'
 
-      - name: Neutralizar incbin.h y compilar
+      - name: Compilar Fafnir a WASM
         run: |
           mkdir -p dist
 
-          # 1. Neutralizamos incbin.h sin romper la sangría YAML
-          #    (en WASM la red se carga desde el FS virtual, no embebida)
-          INCBIN_PATH=$(find third_party/stockfish -type f -name "incbin.h" | head -n 1)
-          if [ -n "$INCBIN_PATH" ]; then
-            echo "Neutralizando $INCBIN_PATH para WebAssembly..."
-            echo '#ifndef INCBIN_HDR' > "$INCBIN_PATH"
-            echo '#define INCBIN_HDR' >> "$INCBIN_PATH"
-            echo '#define INCBIN(NAME, FILENAME) extern "C" { const unsigned char g##NAME##Data[1] = {0}; const unsigned char* const g##NAME##End = g##NAME##Data; const unsigned int g##NAME##Size = 0; }' >> "$INCBIN_PATH"
-            echo '#define INCBIN_EXTERN(NAME) extern "C" { extern const unsigned char g##NAME##Data[]; extern const unsigned char* const g##NAME##End; extern const unsigned int g##NAME##Size; }' >> "$INCBIN_PATH"
-            echo '#endif' >> "$INCBIN_PATH"
-          fi
-
-          # 2. Búsqueda de fuentes C++
-          #    java_api.cpp requiere JNI (jni.h) y no puede compilarse en
-          #    WASM: el puente JNI sólo es nativo de escritorio.
+          # 1. Fuentes del motor.
+          #    wasm_api.cpp son los bindings Emscripten (fafnir_*); main.cpp
+          #    UCI-CLI se mantiene como modulo de texto.
           SRC_ENGINE=$(find src/ui src/engine -type f -name "*.cpp")
-          SRC_BRIDGES=$(find src/bridges -type f -name "*.cpp" ! -name "java_api*")
+          SRC_BRIDGES=$(find src/bridges -type f -name "*.cpp")
           SRC_PROBE=$(find third_party/stockfish -type f -name "*.cpp" \
-            ! -path "*/universal/*")
+            ! -path "*/universal/*" \
+            ! -path "*/stockfish/probe/*")
 
           NNUE_FILE=$(find assets/nnue -type f -name "*.nnue" | head -n 1)
 
           echo "Archivo NNUE detectado: $NNUE_FILE"
           echo "Compilando Fafnir para WASM..."
+
+          # 2. Notas de compilacion:
+          #    - La red NNUE NO se incrusta con incbin (NNUE_EMBEDDING_OFF la
+          #      desactiva); se mapea el archivo via --embed-file. Asi no se
+          #      modifica ningun fuente vendido en tiempo de build.
+          #    - third_party/stockfish/probe/ es una API legacy de probe para
+          #      un snapshot anterior de Stockfish y no se compila (igual que
+          #      en el Makefile nativo).
 
           em++ $SRC_ENGINE $SRC_BRIDGES $SRC_PROBE \
             -std=c++17 \

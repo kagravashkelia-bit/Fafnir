@@ -53,9 +53,6 @@ implementación propia:
 
 ### Interfaces adicionales
 
-- **API JNI** (`src/bridges/java_api.{h,cpp}`) para consumir el evaluador
-  NNUE desde Java (`NNUEBridge`: `init`, `evalFen`, `evalArray`,
-  `fasterEvalArray`).
 - **API C para WASM** (`src/ui/fafnir_wasm_api.h`):
   `fafnir_init`, `fafnir_set_fen`, `fafnir_go_movetime`, `fafnir_stop`,
   `fafnir_eval`. Ver estado más abajo.
@@ -119,9 +116,11 @@ El binario `bin/Fafnir(.exe)` refleja siempre la última arquitectura usada.
 Requiere Emscripten en el `PATH`. Salida en `build-wasm/Fafnir.js` +
 `Fafnir.wasm`. La edición web pública sigue **en preparación**; mientras
 tanto, la CI compila el artefacto `Fafnir-WASM-Build` en cada push (el build
-fallaba desde la reorganización del código porque el workflow incluía el
-puente JNI `java_api.cpp`, que requiere JNI y no es compilable en WASM;
-el `find` del workflow ya excluye ese archivo).
+fallaba desde la reorganización del código porque el `find` del workflow
+arrastaba código no compilable contra el snapshot actual: el clásico puente
+JNI `java_api.cpp` (requiere `jni.h`) y el `probe.cpp` legacy del snapshot
+anterior de Stockfish; ambos eliminados/excluidos y el workflow ya no muta
+el `incbin.h` vendido).
 
 ---
 

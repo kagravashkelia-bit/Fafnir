@@ -24,6 +24,27 @@ BUILD_DIR := build-wasm
 TARGET := $(BUILD_DIR)/Fafnir.js
 
 # ============================================================================
+# DIALECTO DE SHELL (cmd.exe vs sh/msys2/Git Bash)
+#   "echo -n ok" imprime "ok" bajo sh y "-n ok" bajo cmd.exe.
+#   Da igual el SO del host: los recipes de make se ejecutan con la shell
+#   que make tenga configurada.
+# ============================================================================
+SHELL_DETECT := $(shell echo -n ok 2>&1)
+ifeq ($(SHELL_DETECT),ok)
+    SHELL_POSIX := 1
+endif
+
+ifeq ($(SHELL_POSIX),)
+    FAIND = $(subst /,\,$1)
+    MKDIR_CMD = if not exist $(1) mkdir $(1)
+    RMDIR_CMD = if exist $(1) rmdir /s /q $(1)
+else
+    FAIND = $1
+    MKDIR_CMD = mkdir -p $(1)
+    RMDIR_CMD = rm -rf $(1)
+endif
+
+# ============================================================================
 # OPTIMIZACIÓN
 # ============================================================================
 
@@ -166,7 +187,7 @@ all: $(TARGET)
 # ============================================================================
 
 $(TARGET): $(OBJ) $(NNUE_FILE)
-	-@mkdir $(BUILD_DIR) 2>nul
+	-@$(call MKDIR_CMD,$(call FAIND,$(BUILD_DIR)))
 	@echo Enlazando Fafnir WASM + SFNNv17...
 	$(CXX) $(CXXFLAGS) $(OBJ) -o $@ $(LDFLAGS)
 	@echo Fafnir WASM compilado correctamente.
@@ -176,7 +197,7 @@ $(TARGET): $(OBJ) $(NNUE_FILE)
 # ============================================================================
 
 $(BUILD_DIR)/%.o: %.cpp
-	-@mkdir $(dir $@) 2>nul
+	-@$(call MKDIR_CMD,$(call FAIND,$(dir $@)))
 	@echo Compilando $<...
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -187,7 +208,7 @@ $(BUILD_DIR)/$(SFDEV_SRC)/nnue/network.o: $(NNUE_FILE)
 # ============================================================================
 
 $(BUILD_DIR)/%.o: %.c
-	-@mkdir $(dir $@) 2>nul
+	-@$(call MKDIR_CMD,$(call FAIND,$(dir $@)))
 	@echo Compilando $<...
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -196,7 +217,7 @@ $(BUILD_DIR)/%.o: %.c
 # ============================================================================
 
 clean:
-	-@if exist "$(BUILD_DIR)" rmdir /s /q "$(BUILD_DIR)"
+	-@$(call RMDIR_CMD,$(call FAIND,$(BUILD_DIR)))
 
 # ============================================================================
 # REBUILD

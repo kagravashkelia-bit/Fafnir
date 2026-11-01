@@ -18,6 +18,9 @@ parches mínimos documentados). **No se modifica salvo parche documentado.**
 - Licencia: GPLv3 (`stockfish/probe/LICENSE`, `sfdev/Copying.txt`,
   `sfdev/AUTHORS`).
 - Solo se compila el subconjunto requerido por el probe NNUE (ver `Makefile`).
+- **No se compila:** `stockfish/probe/` (API legacy de probe FEN→eval para un
+  snapshot anterior de Stockfish; no compila contra el snapshot actual y no
+  forma parte de ningún binario de este repo: nativo, WASM ni JNI).
 
 ### Parche local documentado (único sobre el vendido)
 
