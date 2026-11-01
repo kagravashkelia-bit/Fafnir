@@ -8,8 +8,8 @@ project uses descriptive one-line commit messages instead of semantic presets.
 
 The public history of this repository was consolidated on 2026-11-01 into
 three descriptive commits (engine, website/documentation, build & CI fixes).
-Earlier development revisions are preserved through the `fafnir2` and `1.3`
-tags, which back their published releases.
+Earlier development revisions remain reachable through the `fafnir2` and
+`1.3` tags; the older releases they once backed have been removed.
 
 ### Added
 - Native multi-architecture build system in the root `Makefile`
@@ -49,5 +49,5 @@ tags, which back their published releases.
 ## Earlier revisions
 
 Revisions before the consolidation above are tagged `fafnir2` (engine
-snapshot release) and `1.3`; their releases with downloadable binaries remain
-available on the [Releases page](https://github.com/kagravashkelia-bit/Fafnir/releases).
+snapshot release) and `1.3`; their published releases were removed, so these
+tags are purely historical markers.
