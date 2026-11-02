@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kagravashkelia-bit.github.io/Fafnir/sitemap.xml

@@ -1,0 +1,22 @@
+{
+  "name": "Fafnir — UCI chess engine",
+  "short_name": "Fafnir",
+  "description": "A UCI chess engine with SFNNv17 NNUE evaluation, a Stockfish-style search and native Windows/Linux builds.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "assets/img/fafnir-mark-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/img/fafnir-mark-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
