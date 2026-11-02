@@ -1,0 +1,226 @@
+# ============================================================================
+# FAFNIR ENGINE - WASM / EMSCRIPTEN
+# Stockfish dev SFNNv17 NNUE probe + single embedded net
+#
+# Usa:
+#   src/ui/main.cpp
+#   src/ui/wasm_api.cpp       ( bindings fafnir_* para la UI web )
+#   src/ui/uci.cpp
+#   src/engine/SearchController.cpp
+#
+# Salida:
+#   build-wasm/Fafnir.js
+#   build-wasm/Fafnir.wasm
+#
+# Todos los objetos WASM quedan aislados en build-wasm/
+# ============================================================================
+
+CXX := em++
+CC  := emcc
+
+STD := -std=c++17
+
+BUILD_DIR := build-wasm
+TARGET := $(BUILD_DIR)/Fafnir.js
+
+# ============================================================================
+# DIALECTO DE SHELL (cmd.exe vs sh/msys2/Git Bash)
+#   "echo -n ok" imprime "ok" bajo sh y "-n ok" bajo cmd.exe.
+#   Da igual el SO del host: los recipes de make se ejecutan con la shell
+#   que make tenga configurada.
+# ============================================================================
+SHELL_DETECT := $(shell echo -n ok 2>&1)
+ifeq ($(SHELL_DETECT),ok)
+    SHELL_POSIX := 1
+endif
+
+ifeq ($(SHELL_POSIX),)
+    FAIND = $(subst /,\,$1)
+    MKDIR_CMD = if not exist $(1) mkdir $(1)
+    RMDIR_CMD = if exist $(1) rmdir /s /q $(1)
+else
+    FAIND = $1
+    MKDIR_CMD = mkdir -p $(1)
+    RMDIR_CMD = rm -rf $(1)
+endif
+
+# ============================================================================
+# OPTIMIZACIÓN
+# ============================================================================
+
+OPTFLAGS := -O3 \
+            -flto \
+            -Wa,-I. \
+            -funroll-loops \
+            -finline-functions \
+            -fomit-frame-pointer \
+            -fexceptions
+
+WASMFLAGS := -msimd128
+
+# ============================================================================
+# INCLUDES
+# ============================================================================
+
+INCLUDES := -Isrc/ui \
+            -Isrc/engine \
+            -Isrc/engine/eval \
+            -Isrc/core \
+            -Isrc/bridges \
+            -I. \
+            -Ithird_party/chesslib \
+            -Ithird_party/stockfish/sfdev/src \
+            -Ithird_party/stockfish/probe \
+            -Ithird_party
+
+# ============================================================================
+# FLAGS C++
+# ============================================================================
+
+CXXFLAGS := $(STD) \
+            $(OPTFLAGS) \
+            $(WASMFLAGS) \
+            -DNNUE_EMBEDDING_OFF \
+            -DNDEBUG \
+            -ffunction-sections \
+            -fdata-sections \
+            -Wall \
+            -Wextra \
+            -MMD \
+            -MP \
+            $(INCLUDES)
+
+# ============================================================================
+# FLAGS C
+# ============================================================================
+
+CFLAGS := $(OPTFLAGS) \
+          $(WASMFLAGS) \
+          -DNDEBUG \
+          -ffunction-sections \
+          -fdata-sections \
+          -Wall \
+          -Wextra \
+          -MMD \
+          -MP \
+          $(INCLUDES)
+
+# ============================================================================
+# LINK
+# ============================================================================
+
+NNUE_FILE := assets/nnue/nn-252f33942263.nnue
+
+LDFLAGS := -O3 -flto \
+           -Wl,--gc-sections \
+           --embed-file $(NNUE_FILE) \
+           -fexceptions \
+           -msimd128 \
+           -sWASM=1 \
+           -sMODULARIZE=1 \
+           -sEXPORT_ES6=1 \
+           -sENVIRONMENT=web,worker,node \
+           -sALLOW_MEMORY_GROWTH=1 \
+           -sINITIAL_MEMORY=268435456 \
+           -sSTACK_SIZE=1048576 \
+           -sEXPORTED_RUNTIME_METHODS=ccall,cwrap \
+           -sEXPORTED_FUNCTIONS=_main,_fafnir_init,_fafnir_set_fen,_fafnir_go_movetime,_fafnir_stop,_fafnir_eval
+
+# ============================================================================
+# ENGINE
+#
+# IMPORTANTE:
+#   Se incluye el main.cpp normal (que en WASM es un no-op).
+#   La API publica es wasm_api.cpp (fafnir_*).
+# ============================================================================
+
+SRC_ENGINE := src/ui/main.cpp \
+              src/ui/wasm_api.cpp \
+              src/ui/uci.cpp \
+              src/engine/SearchController.cpp \
+              src/engine/movepicker.cpp \
+              src/bridges/nnue_probe.cpp
+
+# ============================================================================
+# STOCKFISH DEV NNUE PROBE
+# ============================================================================
+
+SFDEV_SRC := third_party/stockfish/sfdev/src
+SRC_PROBE_CPP := $(SFDEV_SRC)/attacks.cpp \
+                 $(SFDEV_SRC)/bitboard.cpp \
+                 $(SFDEV_SRC)/position.cpp \
+                 $(SFDEV_SRC)/misc.cpp \
+                 $(SFDEV_SRC)/nnue/network.cpp \
+                 $(SFDEV_SRC)/nnue/nnue_accumulator.cpp \
+                 $(SFDEV_SRC)/nnue/nnue_misc.cpp \
+                 $(SFDEV_SRC)/nnue/features/full_threats.cpp \
+                 $(SFDEV_SRC)/nnue/features/half_ka_v2_hm.cpp \
+                 $(SFDEV_SRC)/nnue/features/pp_3wide.cpp
+SRC_PROBE_C :=
+
+# ============================================================================
+# OBJETOS
+# ============================================================================
+
+SRC_CPP := $(SRC_ENGINE) \
+           $(SRC_PROBE_CPP)
+
+OBJ_CPP := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRC_CPP))
+OBJ_C   := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC_PROBE_C))
+
+OBJ := $(OBJ_CPP) $(OBJ_C)
+
+DEP := $(OBJ:.o=.d)
+
+# ============================================================================
+# DEFAULT
+# ============================================================================
+
+.PHONY: all clean rebuild
+
+all: $(TARGET)
+
+-include $(DEP)
+
+# ============================================================================
+# LINK
+# ============================================================================
+
+$(TARGET): $(OBJ) $(NNUE_FILE)
+	-@$(call MKDIR_CMD,$(call FAIND,$(BUILD_DIR)))
+	@echo Enlazando Fafnir WASM + SFNNv17...
+	$(CXX) $(CXXFLAGS) $(OBJ) -o $@ $(LDFLAGS)
+	@echo Fafnir WASM compilado correctamente.
+
+# ============================================================================
+# C++
+# ============================================================================
+
+$(BUILD_DIR)/%.o: %.cpp
+	-@$(call MKDIR_CMD,$(call FAIND,$(dir $@)))
+	@echo Compilando $<...
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/$(SFDEV_SRC)/nnue/network.o: $(NNUE_FILE)
+
+# ============================================================================
+# C
+# ============================================================================
+
+$(BUILD_DIR)/%.o: %.c
+	-@$(call MKDIR_CMD,$(call FAIND,$(dir $@)))
+	@echo Compilando $<...
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# ============================================================================
+# CLEAN SOLO WASM
+# ============================================================================
+
+clean:
+	-@$(call RMDIR_CMD,$(call FAIND,$(BUILD_DIR)))
+
+# ============================================================================
+# REBUILD
+# ============================================================================
+
+rebuild: clean all

@@ -1,0 +1,38 @@
+# Build outputs
+*.o
+*.obj
+*.d
+*.exe
+*.dll
+*.so
+*.a
+
+# Build directories
+build/
+build-wasm/
+bin/
+obj/
+
+# Temporary files
+nul
+*.tmp
+*.log
+
+# IDE / editor settings
+.vscode/
+.vs/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+
+# Python cache
+__pycache__/
+*.pyc

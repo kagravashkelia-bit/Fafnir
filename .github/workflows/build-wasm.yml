@@ -1,0 +1,83 @@
+name: Compilar Fafnir a WASM
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-wasm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Emscripten SDK
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: 'latest'
+
+      - name: Compilar Fafnir a WASM
+        run: |
+          mkdir -p dist
+
+          # 1. Fuentes del motor.
+          #    wasm_api.cpp son los bindings Emscripten (fafnir_*); main.cpp
+          #    UCI-CLI se mantiene como modulo de texto.
+          SRC_ENGINE=$(find src/ui src/engine -type f -name "*.cpp")
+          SRC_BRIDGES=$(find src/bridges -type f -name "*.cpp")
+          SRC_PROBE=$(find third_party/stockfish -type f -name "*.cpp" \
+            ! -path "*/universal/*" \
+            ! -path "*/stockfish/probe/*")
+
+          NNUE_FILE=$(find assets/nnue -type f -name "*.nnue" | head -n 1)
+
+          echo "Archivo NNUE detectado: $NNUE_FILE"
+          echo "Compilando Fafnir para WASM..."
+
+          # 2. Notas de compilacion:
+          #    - La red NNUE NO se incrusta con incbin (NNUE_EMBEDDING_OFF la
+          #      desactiva); se mapea el archivo via --embed-file. Asi no se
+          #      modifica ningun fuente vendido en tiempo de build.
+          #    - third_party/stockfish/probe/ es una API legacy de probe para
+          #      un snapshot anterior de Stockfish y no se compila (igual que
+          #      en el Makefile nativo).
+
+          em++ $SRC_ENGINE $SRC_BRIDGES $SRC_PROBE \
+            -std=c++17 \
+            -O3 \
+            -msimd128 \
+            -flto \
+            -funroll-loops \
+            -finline-functions \
+            -fomit-frame-pointer \
+            -DNDEBUG \
+            -DNNUE_EMBEDDING_OFF \
+            -Isrc/ui \
+            -Isrc/engine \
+            -Isrc/engine/eval \
+            -Isrc/bridges \
+            -I. \
+            -Ithird_party/chesslib \
+            -Ithird_party/stockfish/sfdev/src \
+            -Ithird_party/stockfish/probe \
+            -Ithird_party \
+            --embed-file $NNUE_FILE \
+            -s WASM=1 \
+            -s MODULARIZE=1 \
+            -s EXPORT_ES6=1 \
+            -s ENVIRONMENT=web,worker,node \
+            -s ALLOW_MEMORY_GROWTH=1 \
+            -s INITIAL_MEMORY=268435456 \
+            -s STACK_SIZE=1048576 \
+            -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' \
+            -s EXPORTED_FUNCTIONS='["_main","_fafnir_init","_fafnir_set_fen","_fafnir_go_movetime","_fafnir_stop","_fafnir_eval"]' \
+            -o dist/Fafnir.js
+
+      - name: Subir artefacto compilado (.js y .wasm)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fafnir-WASM-Build
+          path: dist/
